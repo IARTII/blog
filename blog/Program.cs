@@ -1,3 +1,7 @@
+using Npgsql;
+using System.Data;
+using System.Text.Json;
+
 List<Post> posts = new List<Post>
 {
     new Post { id = "1", user_id = "1", title="Отдых", contend="Я сегодня хорошо отдохнул в Египте!", created_at=new DateTime(2025, 7, 19, 9, 21, 0) },
@@ -5,6 +9,9 @@ List<Post> posts = new List<Post>
 };
 
 var builder = WebApplication.CreateBuilder();
+//builder.Services.AddSingleton<YourNamespace.Postgres.Db>();
+builder.Services.AddControllers();
+
 var app = builder.Build();
 
 app.UseDefaultFiles();
@@ -23,14 +30,45 @@ app.MapGet("/api/posts/{id}", (string Id) =>
     return Results.Json(user);
 });
 
-app.MapPost("/api/registration", (User user) =>
+app.MapPost("/api/registration", async (HttpContext context, IConfiguration config) =>
 {
-    // устанавливаем id для нового пользователя
-    user.id = Guid.NewGuid().ToString();
-    // добавляем пользователя в список
-    //users.Add(user);
-    return user;
+    using var reader = new StreamReader(context.Request.Body);
+    var body = await reader.ReadToEndAsync();
+
+    var json = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
+
+    if (json == null || !json.ContainsKey("username") || !json.ContainsKey("password"))
+        return Results.BadRequest(new { message = "Неверный формат запроса" });
+
+    var username = json["username"];
+    var password = json["password"];
+
+    var userId = Guid.NewGuid().ToString();
+    var passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
+
+    var connectionString = config.GetConnectionString("DefaultConnection");
+    await using var conn = new NpgsqlConnection(connectionString);
+    await conn.OpenAsync();
+
+    // Проверка на существование пользователя
+    var checkCmd = new NpgsqlCommand("SELECT 1 FROM users WHERE username = @username", conn);
+    checkCmd.Parameters.AddWithValue("username", username);
+    var exists = await checkCmd.ExecuteScalarAsync();
+    if (exists != null)
+        return Results.Conflict(new { message = "Пользователь уже существует." });
+
+    // Вставка
+    var insertCmd = new NpgsqlCommand(
+        "INSERT INTO users (username, password_hash) VALUES (@username, @password_hash)", conn);
+    //insertCmd.Parameters.AddWithValue("id", Convert.ToInt32(userId));
+    insertCmd.Parameters.AddWithValue("username", username);
+    insertCmd.Parameters.AddWithValue("password_hash", passwordHash);
+    await insertCmd.ExecuteNonQueryAsync();
+
+    return Results.Ok(new { message = "Пользователь зарегистрирован", userId });
 });
+
+
 
 //app.MapDelete("/api/users/{id}", (string id) =>
 //{
