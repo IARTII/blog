@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="windows-1251">
+    <title></title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            padding: 20px;
+        }
+
+        .post {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+        }
+
+            .post h2 {
+                margin-top: 0;
+            }
+
+        .date {
+            color: #777;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Мой блог</h1>
+    <div id="posts"></div>
+
+    <script>
+    async function loadPosts() {
+      try {
+        const response = await fetch('/api/posts');
+        if (!response.ok) throw new Error('������ �������� ������');
+        const posts = await response.json();
+
+        const container = document.getElementById('posts');
+        container.innerHTML = '';
+
+        posts.forEach(post => {
+          const postElement = document.createElement('div');
+          postElement.className = 'post';
+          postElement.innerHTML = `
+            <h2>${post.title}</h2>
+            <div class="date">${new Date(post.created_at).toLocaleString()}</div>
+            <p>${post.contend}</p>
+          `;
+          container.appendChild(postElement);
+        });
+      } catch (err) {
+        document.getElementById('posts').innerHTML = `<p style="color:red;">${err.message}</p>`;
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', loadPosts);
+    </script>
+
+</body>
+</html>
