@@ -1,4 +1,5 @@
 using Npgsql;
+using System;
 using System.Data;
 using System.Text.Json;
 
@@ -23,8 +24,9 @@ app.MapGet("/api/posts/{id}", (string Id) =>
 {
     // получаем пользователя по id
     Post? user = posts.FirstOrDefault(u => u.id == Id);
+
     // если не найден, отправляем статусный код и сообщение об ошибке
-    if (user == null) return Results.NotFound(new { message = "Пользователь не найден" });
+    if (user == null) return Results.NotFound(new { message = "Пост не найден" });
 
     // если пользователь найден, отправляем его
     return Results.Json(user);
@@ -43,7 +45,6 @@ app.MapPost("/api/registration", async (HttpContext context, IConfiguration conf
     var username = json["username"];
     var password = json["password"];
 
-    var userId = Guid.NewGuid().ToString();
     var passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
 
     var connectionString = config.GetConnectionString("DefaultConnection");
@@ -60,14 +61,49 @@ app.MapPost("/api/registration", async (HttpContext context, IConfiguration conf
     // Вставка
     var insertCmd = new NpgsqlCommand(
         "INSERT INTO users (username, password_hash) VALUES (@username, @password_hash)", conn);
-    //insertCmd.Parameters.AddWithValue("id", Convert.ToInt32(userId));
     insertCmd.Parameters.AddWithValue("username", username);
     insertCmd.Parameters.AddWithValue("password_hash", passwordHash);
     await insertCmd.ExecuteNonQueryAsync();
 
-    return Results.Ok(new { message = "Пользователь зарегистрирован", userId });
+    return Results.Ok(new { message = "Пользователь зарегистрирован"});
 });
 
+app.MapPost("/api/login", async (HttpContext context, IConfiguration config) =>
+{
+    using var reader = new StreamReader(context.Request.Body);
+    var body = await reader.ReadToEndAsync();
+
+    var json = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
+
+    if (json == null || !json.ContainsKey("username") || !json.ContainsKey("password"))
+        return Results.BadRequest(new { message = "Неверный формат запроса" });
+
+    var username = json["username"];
+    var password = json["password"];
+
+    var connectionString = config.GetConnectionString("DefaultConnection");
+    await using var conn = new NpgsqlConnection(connectionString);
+    await conn.OpenAsync();
+
+    // Проверка на существование пользователя
+    var checkCmd = new NpgsqlCommand("SELECT username FROM users WHERE username = @username", conn);
+    checkCmd.Parameters.AddWithValue("username", username);
+    var exists = await checkCmd.ExecuteScalarAsync();
+    if (exists == null)
+        return Results.Conflict(new { message = "Пользователь не существует." });
+
+    // Поиск хэша пароля
+    var findCmd = new NpgsqlCommand(
+        "SELECT password_hash FROM users WHERE username = @username", conn);
+    findCmd.Parameters.AddWithValue("username", username);
+    var storedHash = await findCmd.ExecuteScalarAsync();
+
+    if (BCrypt.Net.BCrypt.Verify(password, storedHash.ToString()))
+    {
+        return Results.Ok(new { message = "Пользователь вошел" });
+    }
+    return Results.NotFound(new { message = "Неверный пароль" });
+});
 
 
 //app.MapDelete("/api/users/{id}", (string id) =>
@@ -81,15 +117,6 @@ app.MapPost("/api/registration", async (HttpContext context, IConfiguration conf
 //    // если пользователь найден, удаляем его
 //    users.Remove(user);
 //    return Results.Json(user);
-//});
-
-//app.MapPost("/api/users", (Person user) => {
-
-//    // устанавливаем id для нового пользователя
-//    user.Id = Guid.NewGuid().ToString();
-//    // добавляем пользователя в список
-//    users.Add(user);
-//    return user;
 //});
 
 //app.MapPut("/api/users", (Person userData) => {

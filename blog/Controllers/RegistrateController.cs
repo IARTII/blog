@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using YourNamespace.Postgres;
 
-namespace YourNamespace.Controllers
+namespace DataBase.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]

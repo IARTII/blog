@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="windows-1251">
-    <title>Регистрация</title>
+    <title>Вход</title>
     <style>
         body {
             font-family: sans-serif;
@@ -28,7 +28,7 @@
     </style>
 </head>
 <body>
-    <h2>Регистрация</h2>
+    <h2>Вход</h2>
     <div>
         <label>Имя пользователя:</label>
         <input type="text" id="username" />
@@ -36,53 +36,43 @@
         <label>Пароль:</label>
         <input type="password" id="password" />
 
-        <label>Повторите пароль:</label>
-        <input type="password" id="confirmPassword" />
-
         <div id="error" class="error"></div>
 
-        <button onclick="register()">Зарегистрироваться</button>
-        <a href="login.html">Или войдите в аккаунт</a>
+        <button onclick="login()">Войти</button>
     </div>
 
     <script>
-        async function register() {
+        async function login() {
             const username = document.getElementById("username").value.trim();
             const password = document.getElementById("password").value;
-            const confirmPassword = document.getElementById("confirmPassword").value;
             const errorDiv = document.getElementById("error");
 
             errorDiv.textContent = "";
 
-            // Проверки
-            if (!username || !password || !confirmPassword) {
+            // Проверка
+            if (!username || !password) {
                 errorDiv.textContent = "Пожалуйста, заполните все поля.";
-                return;
-            }
-
-            if (password !== confirmPassword) {
-                errorDiv.textContent = "Пароли не совпадают.";
                 return;
             }
 
             // Отправка на сервер
             try {
-                const response = await fetch("/api/registration", {
+                const response = await fetch("/api/login", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ username, password })
                 });
 
                 if (response.ok) {
-                    alert("Регистрация успешна!");
+                    alert("Вход выполнен!");
                     window.location.href = "/blog.html"; // или другая страница
                 } else {
                     const result = await response.json();
-                    errorDiv.textContent = result.message || "Ошибка регистрации.";
+                    errorDiv.textContent = result.message || "Ошибка входа.";
                 }
             } catch (err) {
                 errorDiv.textContent = "Ошибка соединения с сервером.";
-                console.error(err);
+                //console.error(err);
             }
         }
     </script>
