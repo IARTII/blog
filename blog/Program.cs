@@ -1,7 +1,12 @@
 using Npgsql;
 using System;
 using System.Data;
+using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 List<Post> posts = new List<Post>
 {
@@ -11,25 +16,48 @@ List<Post> posts = new List<Post>
 
 var builder = WebApplication.CreateBuilder();
 //builder.Services.AddSingleton<YourNamespace.Postgres.Db>();
+builder.Services.AddAuthentication("CookieAuthBlog")
+    .AddCookie("CookieAuthBlog", options =>
+    {
+        options.Cookie.Name = "CookieAuthBlog";
+        options.LoginPath = "/login";
+        options.ExpireTimeSpan = TimeSpan.FromDays(7);
+    });
+
 builder.Services.AddControllers();
 
 var app = builder.Build();
 
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/posts", () => posts);
+app.MapGet("/api/posts", [Authorize] () => posts);
 
-app.MapGet("/api/posts/{id}", (string Id) =>
+app.MapGet("/api/posts/{id}", [Authorize] async (string Id, IConfiguration config) =>
 {
-    // получаем пользователя по id
-    Post? user = posts.FirstOrDefault(u => u.id == Id);
+    var connectionString = config.GetConnectionString("DefaultConnection");
+    await using var conn = new NpgsqlConnection(connectionString);
+    await conn.OpenAsync();
 
-    // если не найден, отправляем статусный код и сообщение об ошибке
-    if (user == null) return Results.NotFound(new { message = "Пост не найден" });
+    var checkCmd = new NpgsqlCommand("SELECT * FROM posts", conn);
+    Post posts = (Post)(await checkCmd.ExecuteScalarAsync());
+    if (posts == null)
+        return Results.Conflict(new { message = "Постов пока нет!" });
 
-    // если пользователь найден, отправляем его
-    return Results.Json(user);
+    Post? post = posts;
+
+    return Results.Json(post);
+});
+
+app.MapGet("/api/Iregistrate", (HttpContext context, IConfiguration config) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        return Results.Redirect("/blog.html");
+    }
+    return Results.File("wwwroot/index.html", "text/html");
 });
 
 app.MapPost("/api/registration", async (HttpContext context, IConfiguration config) =>
@@ -100,6 +128,16 @@ app.MapPost("/api/login", async (HttpContext context, IConfiguration config) =>
 
     if (BCrypt.Net.BCrypt.Verify(password, storedHash.ToString()))
     {
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, username), // имя пользователя
+            //new Claim("MyCustomClaim", "CustomValue") // можно своё что-то добавить
+        };
+        var identity = new ClaimsIdentity(claims, "CookieAuthBlog"); // создаём "удостоверение"
+        var principal = new ClaimsPrincipal(identity);             // "личность" пользователя
+
+        await context.SignInAsync("CookieAuthBlog", principal);
+
         return Results.Ok(new { message = "Пользователь вошел" });
     }
     return Results.NotFound(new { message = "Неверный пароль" });

@@ -46,6 +46,18 @@
     </div>
 
     <script>
+        Iregistrate();
+
+        async function Iregistrate() {
+            const response = await fetch("/api/Iregistrate", {
+                method: "GET"
+            })
+
+            if (response.redirected) {
+                window.location.href = response.url;
+            }
+        }
+
         async function register() {
             const username = document.getElementById("username").value.trim();
             const password = document.getElementById("password").value;
