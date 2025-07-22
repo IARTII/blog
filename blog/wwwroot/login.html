@@ -65,7 +65,10 @@
 
                 if (response.ok) {
                     alert("Вход выполнен!");
-                    window.location.href = "/blog.html"; // или другая страница
+                    localStorage.setItem("username", username);
+                    setTimeout(() => {
+                        window.location.href = "/blog.html";
+                    }, 100);
                 } else {
                     const result = await response.json();
                     errorDiv.textContent = result.message || "Ошибка входа.";

@@ -5,14 +5,10 @@ using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using System.Text.Json.Serialization;
 
-List<Post> posts = new List<Post>
-{
-    new Post { id = "1", user_id = "1", title="Отдых", contend="Я сегодня хорошо отдохнул в Египте!", created_at=new DateTime(2025, 7, 19, 9, 21, 0) },
-    new Post { id = "2", user_id = "1", title="Еда", contend="Здесь очень вкусная еда!", created_at=new DateTime(2025, 7, 19, 10, 10, 0) }
-};
+List<Post> posts = new List<Post>();
 
 var builder = WebApplication.CreateBuilder();
 //builder.Services.AddSingleton<YourNamespace.Postgres.Db>();
@@ -33,23 +29,40 @@ app.UseAuthorization();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/posts", [Authorize] () => posts);
-
-app.MapGet("/api/posts/{id}", [Authorize] async (string Id, IConfiguration config) =>
+app.MapGet("/api/posts", [Authorize] async (IConfiguration config) =>
 {
-    var connectionString = config.GetConnectionString("DefaultConnection");
-    await using var conn = new NpgsqlConnection(connectionString);
-    await conn.OpenAsync();
+    try
+    {
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
 
-    var checkCmd = new NpgsqlCommand("SELECT * FROM posts", conn);
-    Post posts = (Post)(await checkCmd.ExecuteScalarAsync());
-    if (posts == null)
-        return Results.Conflict(new { message = "Постов пока нет!" });
+        var cmd = new NpgsqlCommand("SELECT id, user_id, title, content, created_at, image_source FROM posts", conn);
+        await using var reader = await cmd.ExecuteReaderAsync();
 
-    Post? post = posts;
+        var posts = new List<Post>();
 
-    return Results.Json(post);
+        while (await reader.ReadAsync())
+        {
+            posts.Add(new Post
+            {
+                id = reader["id"].ToString(),
+                user_id = reader["user_id"].ToString(),
+                title = reader["title"].ToString(),
+                contend = reader["content"].ToString(),
+                created_at = (DateTime)reader["created_at"],
+                image_url = reader["image_source"] == DBNull.Value ? null : reader["image_source"].ToString()
+            });
+        }
+
+        return Results.Json(posts);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message);
+    }
 });
+
 
 app.MapGet("/api/Iregistrate", (HttpContext context, IConfiguration config) =>
 {
@@ -86,7 +99,7 @@ app.MapPost("/api/registration", async (HttpContext context, IConfiguration conf
     if (exists != null)
         return Results.Conflict(new { message = "Пользователь уже существует." });
 
-    // Вставка
+    // Создание пользователя
     var insertCmd = new NpgsqlCommand(
         "INSERT INTO users (username, password_hash) VALUES (@username, @password_hash)", conn);
     insertCmd.Parameters.AddWithValue("username", username);
@@ -130,11 +143,10 @@ app.MapPost("/api/login", async (HttpContext context, IConfiguration config) =>
     {
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Name, username), // имя пользователя
-            //new Claim("MyCustomClaim", "CustomValue") // можно своё что-то добавить
+            new Claim(ClaimTypes.Name, username),
         };
-        var identity = new ClaimsIdentity(claims, "CookieAuthBlog"); // создаём "удостоверение"
-        var principal = new ClaimsPrincipal(identity);             // "личность" пользователя
+        var identity = new ClaimsIdentity(claims, "CookieAuthBlog");
+        var principal = new ClaimsPrincipal(identity);
 
         await context.SignInAsync("CookieAuthBlog", principal);
 
@@ -143,6 +155,57 @@ app.MapPost("/api/login", async (HttpContext context, IConfiguration config) =>
     return Results.NotFound(new { message = "Неверный пароль" });
 });
 
+app.MapPost("/api/add_post", async (HttpRequest request, IConfiguration config) =>
+{
+    var form = await request.ReadFormAsync();
+
+    var title = form["title"];
+    var content = form["content"];
+    var username = form["username"];
+    var createdAt = DateTime.UtcNow;
+    var file = form.Files["image"];
+    string? imageUrl = null;
+
+    if (file != null && file.Length > 0)
+    {
+        var uploadFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images");
+        Directory.CreateDirectory(uploadFolder);
+
+        var uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
+        var filePath = Path.Combine(uploadFolder, uniqueFileName);
+
+        await using var stream = new FileStream(filePath, FileMode.Create);
+        await file.CopyToAsync(stream);
+
+        imageUrl = "/images/" + uniqueFileName;
+    }
+
+    var connectionString = config.GetConnectionString("DefaultConnection");
+    await using var conn = new NpgsqlConnection(connectionString);
+    await conn.OpenAsync();
+
+    // Ищем id пользователя
+    var cmdUser = new NpgsqlCommand("SELECT id FROM users WHERE username = @username", conn);
+    cmdUser.Parameters.AddWithValue("username", username.ToString());
+    var userId = await cmdUser.ExecuteScalarAsync();
+
+    if (userId == null)
+        return Results.BadRequest(new { message = "Пользователь не найден." });
+
+    var cmdInsert = new NpgsqlCommand(@"
+        INSERT INTO posts (user_id, title, content, created_at, image_source)
+        VALUES (@user_id, @title, @content, @created_at, @image_url)", conn);
+
+    cmdInsert.Parameters.AddWithValue("user_id", userId);
+    cmdInsert.Parameters.AddWithValue("title", title.ToString());
+    cmdInsert.Parameters.AddWithValue("content", content.ToString());
+    cmdInsert.Parameters.AddWithValue("created_at", createdAt);
+    cmdInsert.Parameters.AddWithValue("image_url", (object?)imageUrl ?? DBNull.Value);
+
+    await cmdInsert.ExecuteNonQueryAsync();
+
+    return Results.Ok(new { message = "Пост добавлен!" });
+});
 
 //app.MapDelete("/api/users/{id}", (string id) =>
 //{
@@ -157,19 +220,6 @@ app.MapPost("/api/login", async (HttpContext context, IConfiguration config) =>
 //    return Results.Json(user);
 //});
 
-//app.MapPut("/api/users", (Person userData) => {
-
-//    // получаем пользователя по id
-//    var user = users.FirstOrDefault(u => u.Id == userData.Id);
-//    // если не найден, отправляем статусный код и сообщение об ошибке
-//    if (user == null) return Results.NotFound(new { message = "Пользователь не найден" });
-//    // если пользователь найден, изменяем его данные и отправляем обратно клиенту
-
-//    user.Age = userData.Age;
-//    user.Name = userData.Name;
-//    return Results.Json(user);
-//});
-
 app.Run();
 
 public class Post
@@ -179,11 +229,5 @@ public class Post
     public string title { get; set; }
     public string contend { get; set; }
     public DateTime created_at { get; set; }
-}
-
-public class User
-{
-    public string id { get; set; }
-    public string username { get; set; }
-    public string password_hash { get; set; }
+    public string? image_url { get; set; }
 }

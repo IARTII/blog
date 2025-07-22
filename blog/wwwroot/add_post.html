@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="windows-1251">
+    <title>Добавить пост</title>
+</head>
+<body>
+    <h2>Добавление поста</h2>
+
+    <form id="postForm" enctype="multipart/form-data">
+        <label for="title">Заголовок:</label><br>
+        <input type="text" id="title" name="title" required><br><br>
+
+        <label for="content">Текст поста:</label><br>
+        <textarea id="content" name="content" rows="10" cols="50" required></textarea><br><br>
+
+        <label for="image">Изображение:</label><br>
+        <input type="file" id="image" name="image" accept="image/*"><br><br>
+
+        <button type="submit">Добавить пост</button>
+    </form>
+
+    <p id="status"></p>
+
+    <script>
+        const username = localStorage.getItem("username");
+
+        document.getElementById("postForm").addEventListener("submit", async function (event) {
+            event.preventDefault();
+
+            const form = document.getElementById("postForm");
+            const formData = new FormData(form);
+            formData.append("username", username);
+
+            try {
+                const response = await fetch("/api/add_post", {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (response.ok) {
+                    document.getElementById("status").textContent = "Пост успешно добавлен!";
+                    form.reset();
+                    setTimeout(() => {
+                        window.location.href = "/blog.html";
+                    }, 1000);
+                } else {
+                    const result = await response.json();
+                    document.getElementById("status").textContent = result.message || "Ошибка при добавлении поста.";
+                }
+            } catch (error) {
+                document.getElementById("status").textContent = "Сетевая ошибка: " + error.message;
+            }
+        });
+    </script>
+</body>
+</html>

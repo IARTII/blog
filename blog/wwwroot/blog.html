@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="windows-1251">
-    <title></title>
+    <title>Недавние посты</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -25,6 +25,12 @@
         .date {
             color: #777;
             font-size: 0.9em;
+        }
+
+        .post img {
+            max-width: 100%;
+            border-radius: 5px;
+            margin-bottom: 10px;
         }
 
         .add-post-button {
@@ -70,11 +76,20 @@
                 posts.forEach(post => {
                     const postElement = document.createElement('div');
                     postElement.className = 'post';
+
+                    // Формируем html с учетом картинки, если есть
+                    let imgHtml = '';
+                    if (post.image_url) {
+                        imgHtml = `<img src="${post.image_url}" alt="Изображение поста">`;
+                    }
+
                     postElement.innerHTML = `
-                <h2>${post.title}</h2>
-                <div class="date">${new Date(post.created_at).toLocaleString()}</div>
-                <p>${post.contend}</p>
-              `;
+                            ${imgHtml}
+                            <h2>${post.title}</h2>
+                            <div class="date">${new Date(post.created_at).toLocaleString()}</div>
+                            <p>${post.contend}</p>
+                        `;
+
                     container.appendChild(postElement);
                 });
             } catch (err) {

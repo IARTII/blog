@@ -87,7 +87,10 @@
 
                 if (response.ok) {
                     alert("Регистрация успешна!");
-                    window.location.href = "/blog.html"; // или другая страница
+                    localStorage.setItem("username", username);
+                    setTimeout(() => {
+                        window.location.href = "/blog.html";
+                    }, 100);
                 } else {
                     const result = await response.json();
                     errorDiv.textContent = result.message || "Ошибка регистрации.";
