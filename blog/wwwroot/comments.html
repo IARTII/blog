@@ -1,0 +1,161 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="windows-1251">
+    <title>Комментарии к посту</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            padding: 20px;
+        }
+
+        .post {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .comment {
+            background: #fff;
+            border-left: 4px solid #4CAF50;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .comment-form {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.1);
+        }
+
+        textarea {
+            width: 100%;
+            height: 80px;
+            padding: 8px;
+            margin-bottom: 10px;
+            resize: vertical;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+            button:hover {
+                background-color: #45a049;
+            }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #333;
+            text-decoration: none;
+        }
+
+            .back-link:hover {
+                text-decoration: underline;
+            }
+    </style>
+</head>
+<body>
+
+    <a href="blog.html" class="back-link">← Назад к постам</a>
+
+    <div id="post" class="post"></div>
+
+    <h3>Комментарии:</h3>
+    <div id="comments"></div>
+
+    <div class="comment-form">
+        <h4>Добавить комментарий</h4>
+        <textarea id="commentText" placeholder="Ваш комментарий..."></textarea>
+        <button onclick="submitComment()">Отправить</button>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const postId = urlParams.get("postId");
+        const username = localStorage.getItem("username") || "Гость";
+
+        async function loadPost() {
+            try {
+                const response = await fetch(`/api/post/${postId}`);
+                if (!response.ok) throw new Error("Ошибка загрузки поста");
+                const post = await response.json();
+
+                const postDiv = document.getElementById("post");
+                postDiv.innerHTML = `
+                    <h2>${post.title}</h2>
+                    <div class="date">${new Date(post.created_at).toLocaleString()}</div>
+                    ${post.image_url ? `<img src="${post.image_url}" alt="Изображение поста" style="max-width:100%; margin-top:10px;">` : ""}
+                    <p>${post.contend}</p>
+                `;
+            } catch (err) {
+                document.getElementById("post").innerHTML = `<p style="color:red;">${err.message}</p>`;
+            }
+        }
+
+        async function loadComments() {
+            try {
+                const response = await fetch(`/api/comments?postId=${postId}`);
+                if (!response.ok) throw new Error("Ошибка загрузки комментариев");
+                const comments = await response.json();
+
+                const container = document.getElementById("comments");
+                container.innerHTML = "";
+
+                if (comments.length === 0) {
+                    container.innerHTML = "<p>Комментариев пока нет.</p>";
+                    return;
+                }
+
+                for (const comment of comments) {
+                    const div = document.createElement("div");
+                    div.className = "comment";
+                    div.innerHTML = `
+                        <strong>${comment.username}</strong> (${new Date(comment.created_at).toLocaleString()}):<br>
+                        ${comment.text}
+                    `;
+                    container.appendChild(div);
+                }
+            } catch (err) {
+                document.getElementById("comments").innerHTML = `<p style="color:red;">${err.message}</p>`;
+            }
+        }
+
+        async function submitComment() {
+            const text = document.getElementById("commentText").value.trim();
+            if (!text) return alert("Комментарий не может быть пустым");
+
+            try {
+                const response = await fetch("/api/add_comment", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ postId, username, text })
+                });
+
+                if (!response.ok) throw new Error("Ошибка отправки комментария");
+
+                document.getElementById("commentText").value = "";
+                await loadComments();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        window.addEventListener("DOMContentLoaded", () => {
+            loadPost();
+            loadComments();
+        });
+    </script>
+</body>
+</html>

@@ -69,6 +69,20 @@
                 background-color: #ff4d4d;
                 color: white;
             }
+
+        .comment-button {
+            background-color: #e0e0e0;
+            border: none;
+            padding: 5px 10px;
+            margin-top: 10px;
+            margin-left: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+            .comment-button:hover {
+                background-color: #d0d0d0;
+            }
     </style>
 </head>
 <body>
@@ -128,6 +142,9 @@
                         <button class="like-button ${likeClass}" data-post-id="${postId}">
                             ❤️ Лайк (<span class="like-count">${likeCount}</span>)
                         </button>
+                        <button class="comment-button" data-post-id="${postId}">
+                            💬 Комментарии
+                        </button>
                     `;
                     container.appendChild(postElement);
                 }
@@ -156,6 +173,14 @@
                         } catch (err) {
                             console.error("Ошибка лайка:", err.message);
                         }
+                    });
+                });
+
+                document.querySelectorAll('.comment-button').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const postId = button.getAttribute('data-post-id');
+                        // Пример: перейти на страницу комментариев
+                        window.location.href = `/comments.html?postId=${postId}`;
                     });
                 });
 

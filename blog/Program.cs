@@ -1,4 +1,4 @@
-using Npgsql;
+п»їusing Npgsql;
 using System;
 using System.Data;
 using System.Security.Claims;
@@ -64,6 +64,131 @@ app.MapGet("/api/posts", [Authorize] async (IConfiguration config) =>
     }
 });
 
+app.MapGet("/api/comments", async (HttpContext context, IConfiguration config) =>
+{
+    try
+    {
+        if (!context.Request.Query.TryGetValue("postId", out var postIdStr) || !int.TryParse(postIdStr, out var postId))
+            return Results.BadRequest(new { message = "РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ postId" });
+
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        // Р—Р°РїСЂРѕСЃ СЃ JOIN, С‡С‚РѕР±С‹ РїРѕР»СѓС‡РёС‚СЊ username
+        var command = new NpgsqlCommand(@"SELECT users.username, comments.content, comments.created_at FROM comments JOIN users ON users.id = comments.user_id WHERE comments.post_id = @postId ORDER BY comments.created_at ASC", connection);
+        command.Parameters.AddWithValue("postId", postId);
+
+        var comments = new List<object>();
+
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            comments.Add(new
+            {
+                username = reader.GetString(0),    
+                text = reader.GetString(1),         
+                created_at = reader.GetDateTime(2)  
+            });
+        }
+
+        return Results.Json(comments);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem("РћС€РёР±РєР°: " + ex.Message);
+    }
+});
+
+
+app.MapPost("/api/add_comment", async (HttpContext context, IConfiguration config) =>
+{
+    try
+    {
+        using var reader = new StreamReader(context.Request.Body);
+        var body = await reader.ReadToEndAsync();
+        var json = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
+
+        var postId = int.Parse(json["postId"]);
+        var username = json["username"];
+        var text = json["text"];
+
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        // РџРѕР»СѓС‡Р°РµРј user_id РїРѕ username
+        var cmdGetUserId = new NpgsqlCommand("SELECT id FROM users WHERE username = @username", connection);
+        cmdGetUserId.Parameters.AddWithValue("username", username);
+
+        int userId;
+        await using (var readerUser = await cmdGetUserId.ExecuteReaderAsync())
+        {
+            if (!await readerUser.ReadAsync())
+                return Results.BadRequest(new { message = "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ" });
+
+            userId = readerUser.GetInt32(0);
+        }
+
+        // Р”РѕР±Р°РІР»СЏРµРј РєРѕРјРјРµРЅС‚Р°СЂРёР№
+        var cmdInsert = new NpgsqlCommand(@"
+            INSERT INTO comments (post_id, user_id, content, created_at) 
+            VALUES (@post_id, @user_id, @content, @created_at)", connection);
+
+        cmdInsert.Parameters.AddWithValue("post_id", postId);
+        cmdInsert.Parameters.AddWithValue("user_id", userId);
+        cmdInsert.Parameters.AddWithValue("content", text);
+        cmdInsert.Parameters.AddWithValue("created_at", DateTime.Now);
+
+        await cmdInsert.ExecuteNonQueryAsync();
+
+        return Results.Ok(new { message = "РљРѕРјРјРµРЅС‚Р°СЂРёР№ РґРѕР±Р°РІР»РµРЅ" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem("РћС€РёР±РєР°: " + ex.Message);
+    }
+});
+
+app.MapGet("/api/post/{id}", async (HttpContext context, IConfiguration config, int id) =>
+{
+    try
+    {
+        var connectionString = config.GetConnectionString("DefaultConnection");
+
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        var command = new NpgsqlCommand("SELECT id, title, content, image_source, created_at FROM posts WHERE id = @id", connection);
+        command.Parameters.AddWithValue("id", id);
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        if (await reader.ReadAsync())
+        {
+            var post = new
+            {
+                id = reader.GetInt32(0),
+                title = reader.GetString(1),
+                contend = reader.GetString(2),
+                image_url = reader.IsDBNull(3) ? null : reader.GetString(3),
+                created_at = reader.GetDateTime(4)
+            };
+
+            return Results.Json(post);
+        }
+        else
+        {
+            return Results.NotFound(new { message = "РџРѕСЃС‚ РЅРµ РЅР°Р№РґРµРЅ" });
+        }
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"РћС€РёР±РєР° СЃРµСЂРІРµСЂР°: {ex.Message}");
+    }
+});
+
+
 app.MapGet("/api/Iregistrate", (HttpContext context, IConfiguration config) =>
 {
     if (context.User.Identity?.IsAuthenticated == true)
@@ -81,7 +206,7 @@ app.MapPost("/api/registration", async (HttpContext context, IConfiguration conf
     var json = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
 
     if (json == null || !json.ContainsKey("username") || !json.ContainsKey("password"))
-        return Results.BadRequest(new { message = "Неверный формат запроса" });
+        return Results.BadRequest(new { message = "РќРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р·Р°РїСЂРѕСЃР°" });
 
     var username = json["username"];
     var password = json["password"];
@@ -92,21 +217,21 @@ app.MapPost("/api/registration", async (HttpContext context, IConfiguration conf
     await using var conn = new NpgsqlConnection(connectionString);
     await conn.OpenAsync();
 
-    // Проверка на существование пользователя
+    // РџСЂРѕРІРµСЂРєР° РЅР° СЃСѓС‰РµСЃС‚РІРѕРІР°РЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
     var checkCmd = new NpgsqlCommand("SELECT 1 FROM users WHERE username = @username", conn);
     checkCmd.Parameters.AddWithValue("username", username);
     var exists = await checkCmd.ExecuteScalarAsync();
     if (exists != null)
-        return Results.Conflict(new { message = "Пользователь уже существует." });
+        return Results.Conflict(new { message = "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚." });
 
-    // Создание пользователя
+    // РЎРѕР·РґР°РЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
     var insertCmd = new NpgsqlCommand(
         "INSERT INTO users (username, password_hash) VALUES (@username, @password_hash)", conn);
     insertCmd.Parameters.AddWithValue("username", username);
     insertCmd.Parameters.AddWithValue("password_hash", passwordHash);
     await insertCmd.ExecuteNonQueryAsync();
 
-    return Results.Ok(new { message = "Пользователь зарегистрирован"});
+    return Results.Ok(new { message = "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ"});
 });
 
 app.MapPost("/api/login", async (HttpContext context, IConfiguration config) =>
@@ -117,7 +242,7 @@ app.MapPost("/api/login", async (HttpContext context, IConfiguration config) =>
     var json = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
 
     if (json == null || !json.ContainsKey("username") || !json.ContainsKey("password"))
-        return Results.BadRequest(new { message = "Неверный формат запроса" });
+        return Results.BadRequest(new { message = "РќРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р·Р°РїСЂРѕСЃР°" });
 
     var username = json["username"];
     var password = json["password"];
@@ -126,14 +251,14 @@ app.MapPost("/api/login", async (HttpContext context, IConfiguration config) =>
     await using var conn = new NpgsqlConnection(connectionString);
     await conn.OpenAsync();
 
-    // Проверка на существование пользователя
+    // РџСЂРѕРІРµСЂРєР° РЅР° СЃСѓС‰РµСЃС‚РІРѕРІР°РЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
     var checkCmd = new NpgsqlCommand("SELECT username FROM users WHERE username = @username", conn);
     checkCmd.Parameters.AddWithValue("username", username);
     var exists = await checkCmd.ExecuteScalarAsync();
     if (exists == null)
-        return Results.Conflict(new { message = "Пользователь не существует." });
+        return Results.Conflict(new { message = "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚." });
 
-    // Поиск хэша пароля
+    // РџРѕРёСЃРє С…СЌС€Р° РїР°СЂРѕР»СЏ
     var findCmd = new NpgsqlCommand(
         "SELECT password_hash FROM users WHERE username = @username", conn);
     findCmd.Parameters.AddWithValue("username", username);
@@ -150,9 +275,9 @@ app.MapPost("/api/login", async (HttpContext context, IConfiguration config) =>
 
         await context.SignInAsync("CookieAuthBlog", principal);
 
-        return Results.Ok(new { message = "Пользователь вошел" });
+        return Results.Ok(new { message = "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РІРѕС€РµР»" });
     }
-    return Results.NotFound(new { message = "Неверный пароль" });
+    return Results.NotFound(new { message = "РќРµРІРµСЂРЅС‹Р№ РїР°СЂРѕР»СЊ" });
 });
 
 app.MapPost("/api/add_post", async (HttpRequest request, IConfiguration config) =>
@@ -184,13 +309,13 @@ app.MapPost("/api/add_post", async (HttpRequest request, IConfiguration config) 
     await using var conn = new NpgsqlConnection(connectionString);
     await conn.OpenAsync();
 
-    // Ищем id пользователя
+    // РС‰РµРј id РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
     var cmdUser = new NpgsqlCommand("SELECT id FROM users WHERE username = @username", conn);
     cmdUser.Parameters.AddWithValue("username", username.ToString());
     var userId = await cmdUser.ExecuteScalarAsync();
 
     if (userId == null)
-        return Results.BadRequest(new { message = "Пользователь не найден." });
+        return Results.BadRequest(new { message = "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ." });
 
     var cmdInsert = new NpgsqlCommand(@"
         INSERT INTO posts (user_id, title, content, created_at, image_source)
@@ -204,7 +329,7 @@ app.MapPost("/api/add_post", async (HttpRequest request, IConfiguration config) 
 
     await cmdInsert.ExecuteNonQueryAsync();
 
-    return Results.Ok(new { message = "Пост добавлен!" });
+    return Results.Ok(new { message = "РџРѕСЃС‚ РґРѕР±Р°РІР»РµРЅ!" });
 });
 
 app.MapPost("/api/liked", async (HttpContext context, IConfiguration config) =>
@@ -221,22 +346,22 @@ app.MapPost("/api/liked", async (HttpContext context, IConfiguration config) =>
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync();
 
-        // Получаем user_id по username
+        // РџРѕР»СѓС‡Р°РµРј user_id РїРѕ username
         var getUserCmd = new NpgsqlCommand("SELECT id FROM users WHERE username = @username", conn);
         getUserCmd.Parameters.AddWithValue("username", username);
         var userId = (int?)await getUserCmd.ExecuteScalarAsync();
 
         if (userId == null)
         {
-            return Results.BadRequest("Пользователь не найден");
+            return Results.BadRequest("РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ");
         }
 
-        // Получаем количество лайков у поста
+        // РџРѕР»СѓС‡Р°РµРј РєРѕР»РёС‡РµСЃС‚РІРѕ Р»Р°Р№РєРѕРІ Сѓ РїРѕСЃС‚Р°
         var countCmd = new NpgsqlCommand("SELECT COUNT(DISTINCT user_id) FROM likes WHERE post_id = @postId", conn);
         countCmd.Parameters.AddWithValue("postId", postId);
         var likeCount = (long?)await countCmd.ExecuteScalarAsync() ?? 0;
 
-        // Проверяем, лайкнул ли пользователь
+        // РџСЂРѕРІРµСЂСЏРµРј, Р»Р°Р№РєРЅСѓР» Р»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ
         var likedCmd = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM likes WHERE user_id = @userId AND post_id = @postId)", conn);
         likedCmd.Parameters.AddWithValue("userId", userId);
         likedCmd.Parameters.AddWithValue("postId", postId);
@@ -258,7 +383,7 @@ app.MapPost("/api/like_post", async (HttpContext context, IConfiguration config)
         var json = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
 
         if (json == null || !json.ContainsKey("postId") || !json.ContainsKey("username"))
-            return Results.BadRequest("Неверные данные запроса");
+            return Results.BadRequest("РќРµРІРµСЂРЅС‹Рµ РґР°РЅРЅС‹Рµ Р·Р°РїСЂРѕСЃР°");
 
         var postId = int.Parse(json["postId"]);
         var username = json["username"];
@@ -272,11 +397,11 @@ app.MapPost("/api/like_post", async (HttpContext context, IConfiguration config)
         var userIdObj = await getUserCmd.ExecuteScalarAsync();
 
         if (userIdObj == null)
-            return Results.BadRequest("Пользователь не найден");
+            return Results.BadRequest("РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ");
 
         var userId = (int)userIdObj;
 
-        // Проверяем существует ли
+        // РџСЂРѕРІРµСЂСЏРµРј СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё
         var checkLikeCmd = new NpgsqlCommand("SELECT 1 FROM likes WHERE user_id = @userId AND post_id = @postId", conn);
         checkLikeCmd.Parameters.AddWithValue("userId", userId);
         checkLikeCmd.Parameters.AddWithValue("postId", postId);
@@ -284,7 +409,7 @@ app.MapPost("/api/like_post", async (HttpContext context, IConfiguration config)
 
         if (exists)
         {
-            // Удаляет
+            // РЈРґР°Р»СЏРµС‚
             var deleteCmd = new NpgsqlCommand("DELETE FROM likes WHERE user_id = @userId AND post_id = @postId", conn);
             deleteCmd.Parameters.AddWithValue("userId", userId);
             deleteCmd.Parameters.AddWithValue("postId", postId);
@@ -292,14 +417,14 @@ app.MapPost("/api/like_post", async (HttpContext context, IConfiguration config)
         }
         else
         {
-            // Добавляет
+            // Р”РѕР±Р°РІР»СЏРµС‚
             var insertCmd = new NpgsqlCommand("INSERT INTO likes (user_id, post_id) VALUES (@userId, @postId)", conn);
             insertCmd.Parameters.AddWithValue("userId", userId);
             insertCmd.Parameters.AddWithValue("postId", postId);
             await insertCmd.ExecuteNonQueryAsync();
         }
 
-        // Обновляет
+        // РћР±РЅРѕРІР»СЏРµС‚
         var countCmd = new NpgsqlCommand("SELECT COUNT(DISTINCT user_id) FROM likes WHERE post_id = @postId", conn);
         countCmd.Parameters.AddWithValue("postId", postId);
         var likeCount = (long?)await countCmd.ExecuteScalarAsync() ?? 0;
@@ -313,20 +438,6 @@ app.MapPost("/api/like_post", async (HttpContext context, IConfiguration config)
         return Results.Problem(detail: ex.Message);
     }
 });
-
-
-//app.MapDelete("/api/users/{id}", (string id) =>
-//{
-//    // получаем пользователя по id
-//    Person? user = users.FirstOrDefault(u => u.Id == id);
-
-//    // если не найден, отправляем статусный код и сообщение об ошибке
-//    if (user == null) return Results.NotFound(new { message = "Пользователь не найден" });
-
-//    // если пользователь найден, удаляем его
-//    users.Remove(user);
-//    return Results.Json(user);
-//});
 
 app.Run();
 
