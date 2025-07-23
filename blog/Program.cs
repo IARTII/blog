@@ -54,6 +54,7 @@ app.MapGet("/api/posts", [Authorize] async (IConfiguration config) =>
                 image_url = reader["image_source"] == DBNull.Value ? null : reader["image_source"].ToString()
             });
         }
+        posts.Reverse();
 
         return Results.Json(posts);
     }
@@ -62,7 +63,6 @@ app.MapGet("/api/posts", [Authorize] async (IConfiguration config) =>
         return Results.Problem(detail: ex.Message);
     }
 });
-
 
 app.MapGet("/api/Iregistrate", (HttpContext context, IConfiguration config) =>
 {
@@ -207,6 +207,114 @@ app.MapPost("/api/add_post", async (HttpRequest request, IConfiguration config) 
     return Results.Ok(new { message = "Пост добавлен!" });
 });
 
+app.MapPost("/api/liked", async (HttpContext context, IConfiguration config) =>
+{
+    try
+    {
+        var body = await new StreamReader(context.Request.Body).ReadToEndAsync();
+        var json = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
+
+        var postId = int.Parse(json["postId"]);
+        var username = json["username"];
+
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        // Получаем user_id по username
+        var getUserCmd = new NpgsqlCommand("SELECT id FROM users WHERE username = @username", conn);
+        getUserCmd.Parameters.AddWithValue("username", username);
+        var userId = (int?)await getUserCmd.ExecuteScalarAsync();
+
+        if (userId == null)
+        {
+            return Results.BadRequest("Пользователь не найден");
+        }
+
+        // Получаем количество лайков у поста
+        var countCmd = new NpgsqlCommand("SELECT COUNT(DISTINCT user_id) FROM likes WHERE post_id = @postId", conn);
+        countCmd.Parameters.AddWithValue("postId", postId);
+        var likeCount = (long?)await countCmd.ExecuteScalarAsync() ?? 0;
+
+        // Проверяем, лайкнул ли пользователь
+        var likedCmd = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM likes WHERE user_id = @userId AND post_id = @postId)", conn);
+        likedCmd.Parameters.AddWithValue("userId", userId);
+        likedCmd.Parameters.AddWithValue("postId", postId);
+        var liked = (bool?)await likedCmd.ExecuteScalarAsync() ?? false;
+
+        return Results.Json(new { likeCount, liked });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message);
+    }
+});
+
+app.MapPost("/api/like_post", async (HttpContext context, IConfiguration config) =>
+{
+    try
+    {
+        var body = await new StreamReader(context.Request.Body).ReadToEndAsync();
+        var json = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
+
+        if (json == null || !json.ContainsKey("postId") || !json.ContainsKey("username"))
+            return Results.BadRequest("Неверные данные запроса");
+
+        var postId = int.Parse(json["postId"]);
+        var username = json["username"];
+
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        var getUserCmd = new NpgsqlCommand("SELECT id FROM users WHERE username = @username", conn);
+        getUserCmd.Parameters.AddWithValue("username", username);
+        var userIdObj = await getUserCmd.ExecuteScalarAsync();
+
+        if (userIdObj == null)
+            return Results.BadRequest("Пользователь не найден");
+
+        var userId = (int)userIdObj;
+
+        // Проверяем существует ли
+        var checkLikeCmd = new NpgsqlCommand("SELECT 1 FROM likes WHERE user_id = @userId AND post_id = @postId", conn);
+        checkLikeCmd.Parameters.AddWithValue("userId", userId);
+        checkLikeCmd.Parameters.AddWithValue("postId", postId);
+        var exists = await checkLikeCmd.ExecuteScalarAsync() != null;
+
+        if (exists)
+        {
+            // Удаляет
+            var deleteCmd = new NpgsqlCommand("DELETE FROM likes WHERE user_id = @userId AND post_id = @postId", conn);
+            deleteCmd.Parameters.AddWithValue("userId", userId);
+            deleteCmd.Parameters.AddWithValue("postId", postId);
+            await deleteCmd.ExecuteNonQueryAsync();
+        }
+        else
+        {
+            // Добавляет
+            var insertCmd = new NpgsqlCommand("INSERT INTO likes (user_id, post_id) VALUES (@userId, @postId)", conn);
+            insertCmd.Parameters.AddWithValue("userId", userId);
+            insertCmd.Parameters.AddWithValue("postId", postId);
+            await insertCmd.ExecuteNonQueryAsync();
+        }
+
+        // Обновляет
+        var countCmd = new NpgsqlCommand("SELECT COUNT(DISTINCT user_id) FROM likes WHERE post_id = @postId", conn);
+        countCmd.Parameters.AddWithValue("postId", postId);
+        var likeCount = (long?)await countCmd.ExecuteScalarAsync() ?? 0;
+
+        var liked = !exists;
+
+        return Results.Json(new { likeCount, liked });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message);
+    }
+});
+
+
 //app.MapDelete("/api/users/{id}", (string id) =>
 //{
 //    // получаем пользователя по id
@@ -230,4 +338,10 @@ public class Post
     public string contend { get; set; }
     public DateTime created_at { get; set; }
     public string? image_url { get; set; }
+}
+
+public class Like
+{
+    public string likeCount { get; set; }
+    public bool liked { get; set; }
 }

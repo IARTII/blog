@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+п»ї<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="windows-1251">
-    <title>Недавние посты</title>
+    <title>РќРµРґР°РІРЅРёРµ РїРѕСЃС‚С‹</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -55,11 +55,25 @@
             .add-post-button:hover {
                 background-color: #45a049;
             }
+
+        .like-button {
+            background-color: #eee;
+            border: none;
+            padding: 5px 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+            .like-button.liked {
+                background-color: #ff4d4d;
+                color: white;
+            }
     </style>
 </head>
 <body>
 
-    <h1>Недавние посты</h1>
+    <h1>РќРµРґР°РІРЅРёРµ РїРѕСЃС‚С‹</h1>
     <a href="add_post.html" class="add-post-button">+</a>
     <div id="posts"></div>
 
@@ -67,31 +81,84 @@
         async function loadPosts() {
             try {
                 const response = await fetch('/api/posts');
-                if (!response.ok) throw new Error('Возникла ошибка при взаимодействии с сервером');
+                if (!response.ok) throw new Error('Р’РѕР·РЅРёРєР»Р° РѕС€РёР±РєР° РїСЂРё РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРё СЃ СЃРµСЂРІРµСЂРѕРј');
                 const posts = await response.json();
 
                 const container = document.getElementById('posts');
                 container.innerHTML = '';
 
-                posts.forEach(post => {
+                for (const post of posts) {
                     const postElement = document.createElement('div');
                     postElement.className = 'post';
 
-                    // Формируем html с учетом картинки, если есть
                     let imgHtml = '';
                     if (post.image_url) {
-                        imgHtml = `<img src="${post.image_url}" alt="Изображение поста">`;
+                        imgHtml = `<img src="${post.image_url}" alt="РР·РѕР±СЂР°Р¶РµРЅРёРµ РїРѕСЃС‚Р°">`;
+                    }
+
+                    const postId = post.id;
+                    const username = localStorage.getItem("username");
+
+                    let likeCount = 0;
+                    let liked = false;
+                    let likeClass = '';
+
+                    try {
+                        const like_response = await fetch("/api/liked", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ postId, username })
+                        });
+
+                        if (!like_response.ok) throw new Error('РћС€РёР±РєР° РїСЂРё РїРѕР»СѓС‡РµРЅРёРё Р»Р°Р№РєРѕРІ');
+
+                        const like_info = await like_response.json();
+                        likeCount = like_info.likeCount;
+                        liked = like_info.liked;
+                        likeClass = liked ? 'liked' : '';
+                    } catch (err) {
+                        console.error("РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ Р»Р°Р№РєРѕРІ:", err.message);
                     }
 
                     postElement.innerHTML = `
-                            ${imgHtml}
-                            <h2>${post.title}</h2>
-                            <div class="date">${new Date(post.created_at).toLocaleString()}</div>
-                            <p>${post.contend}</p>
-                        `;
-
+                        ${imgHtml}
+                        <h2>${post.title}</h2>
+                        <div class="date">${new Date(post.created_at).toLocaleString()}</div>
+                        <p>${post.contend}</p>
+                        <button class="like-button ${likeClass}" data-post-id="${postId}">
+                            вќ¤пёЏ Р›Р°Р№Рє (<span class="like-count">${likeCount}</span>)
+                        </button>
+                    `;
                     container.appendChild(postElement);
+                }
+
+                // РќР°Р·РЅР°С‡Р°РµРј РѕР±СЂР°Р±РѕС‚С‡РёРєРё РєР»РёРєРѕРІ РЅР° РІСЃРµ РєРЅРѕРїРєРё Р»Р°Р№РєРѕРІ
+                document.querySelectorAll('.like-button').forEach(button => {
+                    button.addEventListener('click', async () => {
+                        const postId = button.getAttribute('data-post-id');
+                        const username = localStorage.getItem("username");
+
+                        try {
+                            const response = await fetch("/api/like_post", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ postId, username })
+                            });
+
+                            if (!response.ok) throw new Error("РћС€РёР±РєР° РїСЂРё РѕС‚РїСЂР°РІРєРµ Р»Р°Р№РєР°");
+
+                            const result = await response.json();
+                            const newCount = result.likeCount;
+                            const liked = result.liked;
+
+                            button.classList.toggle('liked', liked);
+                            button.querySelector('.like-count').textContent = newCount;
+                        } catch (err) {
+                            console.error("РћС€РёР±РєР° Р»Р°Р№РєР°:", err.message);
+                        }
+                    });
                 });
+
             } catch (err) {
                 document.getElementById('posts').innerHTML = `<p style="color:red;">${err.message}</p>`;
             }
@@ -99,6 +166,7 @@
 
         window.addEventListener('DOMContentLoaded', loadPosts);
     </script>
+
 
 </body>
 </html>

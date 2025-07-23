@@ -28,6 +28,12 @@
         document.getElementById("postForm").addEventListener("submit", async function (event) {
             event.preventDefault();
 
+            const imageInput = document.getElementById("image");
+            if (imageInput.files.length > 1) {
+                document.getElementById("status").textContent = "ћожно выбрать только одно изображение.";
+                return;
+            }
+
             const form = document.getElementById("postForm");
             const formData = new FormData(form);
             formData.append("username", username);
