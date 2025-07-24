@@ -83,6 +83,42 @@
             .comment-button:hover {
                 background-color: #d0d0d0;
             }
+
+        .logout-button {
+            position: fixed;
+            top: 20px;
+            right: 70px;
+            width: 40px;
+            height: 40px;
+            background-color: #f44336;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: background-color 0.3s ease;
+            z-index: 9999;
+        }
+
+            .logout-button:hover {
+                background-color: #d32f2f;
+            }
+
+        .tags {
+            margin-top: 10px;
+        }
+
+        .tag {
+            display: inline-block;
+            background-color: #dfefff;
+            color: #3366cc;
+            padding: 4px 8px;
+            margin-right: 5px;
+            border-radius: 12px;
+            font-size: 0.85em;
+        }
     </style>
 </head>
 <body>
@@ -90,6 +126,7 @@
     <h1>Недавние посты</h1>
     <a href="add_post.html" class="add-post-button">+</a>
     <div id="posts"></div>
+    <button id="logoutButton" class="logout-button">→▍</button>
 
     <script>
         async function loadPosts() {
@@ -134,22 +171,36 @@
                         console.error("Ошибка получения лайков:", err.message);
                     }
 
+                    // Загрузка тегов
+                    let tagsHtml = '';
+                    try {
+                        const tagResponse = await fetch(`/api/tags?postId=${postId}`);
+                        if (!tagResponse.ok) throw new Error("Ошибка загрузки тегов");
+
+                        const tags = await tagResponse.json();
+                        if (tags.length > 0) {
+                            tagsHtml = `<div class="tags">${tags.map(tag => `<span class="tag">${tag}</span>`).join(' ')}</div>`;
+                        }
+                    } catch (err) {
+                        console.error("Ошибка загрузки тегов:", err.message);
+                    }
+
                     postElement.innerHTML = `
-                        ${imgHtml}
-                        <h2>${post.title}</h2>
-                        <div class="date">${new Date(post.created_at).toLocaleString()}</div>
-                        <p>${post.contend}</p>
-                        <button class="like-button ${likeClass}" data-post-id="${postId}">
-                            ❤️ Лайк (<span class="like-count">${likeCount}</span>)
-                        </button>
-                        <button class="comment-button" data-post-id="${postId}">
-                            💬 Комментарии
-                        </button>
-                    `;
+                            ${imgHtml}
+                            <h2>${post.title}</h2>
+                            <div class="date">${new Date(post.created_at).toLocaleString()}</div>
+                            <p>${post.contend}</p>
+                            ${tagsHtml}
+                            <button class="like-button ${likeClass}" data-post-id="${postId}">
+                                ❤️ Лайк (<span class="like-count">${likeCount}</span>)
+                            </button>
+                            <button class="comment-button" data-post-id="${postId}">
+                                💬 Комментарии
+                            </button>
+                        `;
                     container.appendChild(postElement);
                 }
 
-                // Назначаем обработчики кликов на все кнопки лайков
                 document.querySelectorAll('.like-button').forEach(button => {
                     button.addEventListener('click', async () => {
                         const postId = button.getAttribute('data-post-id');
@@ -179,7 +230,6 @@
                 document.querySelectorAll('.comment-button').forEach(button => {
                     button.addEventListener('click', () => {
                         const postId = button.getAttribute('data-post-id');
-                        // Пример: перейти на страницу комментариев
                         window.location.href = `/comments.html?postId=${postId}`;
                     });
                 });
@@ -189,9 +239,14 @@
             }
         }
 
+        document.getElementById('logoutButton').addEventListener('click', () => {
+            localStorage.removeItem('username');
+            fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/index.html';
+        });
+
         window.addEventListener('DOMContentLoaded', loadPosts);
     </script>
-
 
 </body>
 </html>

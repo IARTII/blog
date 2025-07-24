@@ -280,57 +280,109 @@ app.MapPost("/api/login", async (HttpContext context, IConfiguration config) =>
     return Results.NotFound(new { message = "Неверный пароль" });
 });
 
-app.MapPost("/api/add_post", async (HttpRequest request, IConfiguration config) =>
+app.MapPost("/api/add_post", async (HttpContext context, IConfiguration config) =>
 {
+    var request = context.Request;
+    if (!request.HasFormContentType)
+        return Results.BadRequest(new { message = "Некорректный тип контента" });
+
     var form = await request.ReadFormAsync();
 
-    var title = form["title"];
-    var content = form["content"];
-    var username = form["username"];
-    var createdAt = DateTime.UtcNow;
-    var file = form.Files["image"];
-    string? imageUrl = null;
+    string title = form["title"];
+    string content = form["content"];
+    string tagsRaw = form["tags"];
+    string username = form["username"];
 
-    if (file != null && file.Length > 0)
-    {
-        var uploadFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images");
-        Directory.CreateDirectory(uploadFolder);
-
-        var uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
-        var filePath = Path.Combine(uploadFolder, uniqueFileName);
-
-        await using var stream = new FileStream(filePath, FileMode.Create);
-        await file.CopyToAsync(stream);
-
-        imageUrl = "/images/" + uniqueFileName;
-    }
+    var image = form.Files.GetFile("image");
 
     var connectionString = config.GetConnectionString("DefaultConnection");
-    await using var conn = new NpgsqlConnection(connectionString);
-    await conn.OpenAsync();
+    await using var connection = new NpgsqlConnection(connectionString);
+    await connection.OpenAsync();
 
-    // Ищем id пользователя
-    var cmdUser = new NpgsqlCommand("SELECT id FROM users WHERE username = @username", conn);
-    cmdUser.Parameters.AddWithValue("username", username.ToString());
-    var userId = await cmdUser.ExecuteScalarAsync();
+    await using var transaction = await connection.BeginTransactionAsync();
 
-    if (userId == null)
-        return Results.BadRequest(new { message = "Пользователь не найден." });
+    try
+    {
+        // Получаем user_id
+        var getUserCmd = new NpgsqlCommand("SELECT id FROM users WHERE username = @username", connection, transaction);
+        getUserCmd.Parameters.AddWithValue("@username", username);
+        var userIdObj = await getUserCmd.ExecuteScalarAsync();
+        if (userIdObj == null)
+            return Results.BadRequest(new { message = "Пользователь не найден" });
 
-    var cmdInsert = new NpgsqlCommand(@"
-        INSERT INTO posts (user_id, title, content, created_at, image_source)
-        VALUES (@user_id, @title, @content, @created_at, @image_url)", conn);
+        long userId = Convert.ToInt64(userIdObj);
 
-    cmdInsert.Parameters.AddWithValue("user_id", userId);
-    cmdInsert.Parameters.AddWithValue("title", title.ToString());
-    cmdInsert.Parameters.AddWithValue("content", content.ToString());
-    cmdInsert.Parameters.AddWithValue("created_at", createdAt);
-    cmdInsert.Parameters.AddWithValue("image_url", (object?)imageUrl ?? DBNull.Value);
+        // Обрабатываем изображение
+        string? imagePath = null;
+        if (image != null)
+        {
+            var fileName = Guid.NewGuid() + Path.GetExtension(image.FileName);
+            var savePath = Path.Combine("wwwroot", "images", fileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
+            await using var stream = File.Create(savePath);
+            await image.CopyToAsync(stream);
+            imagePath = "/images/" + fileName;
+        }
 
-    await cmdInsert.ExecuteNonQueryAsync();
+        // Вставляем пост
+        var insertPostCmd = new NpgsqlCommand(
+            "INSERT INTO posts (user_id, title, content, created_at, image_source) VALUES (@user_id, @title, @content, NOW(), @image) RETURNING id",
+            connection, transaction);
+        insertPostCmd.Parameters.AddWithValue("@user_id", userId);
+        insertPostCmd.Parameters.AddWithValue("@title", title);
+        insertPostCmd.Parameters.AddWithValue("@content", content);
+        insertPostCmd.Parameters.AddWithValue("@image", (object?)imagePath ?? DBNull.Value);
 
-    return Results.Ok(new { message = "Пост добавлен!" });
+        var postIdObj = await insertPostCmd.ExecuteScalarAsync();
+        long postId = Convert.ToInt64(postIdObj);
+
+        // Обрабатываем теги
+        var tags = tagsRaw
+            .ToString()
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(t => t.ToLowerInvariant())
+            .Distinct();
+
+        foreach (var tagName in tags)
+        {
+            long tagId;
+
+            // Ищем тег
+            var findTagCmd = new NpgsqlCommand("SELECT id FROM tags WHERE name = @name", connection, transaction);
+            findTagCmd.Parameters.AddWithValue("@name", tagName);
+            var tagIdObj = await findTagCmd.ExecuteScalarAsync();
+
+            if (tagIdObj != null)
+            {
+                tagId = Convert.ToInt64(tagIdObj);
+            }
+            else
+            {
+                // Создаём тег
+                var insertTagCmd = new NpgsqlCommand("INSERT INTO tags (name) VALUES (@name) RETURNING id", connection, transaction);
+                insertTagCmd.Parameters.AddWithValue("@name", tagName);
+                tagId = Convert.ToInt64(await insertTagCmd.ExecuteScalarAsync());
+            }
+
+            // Связываем тег с постом
+            var insertPostTagCmd = new NpgsqlCommand("INSERT INTO post_tags (post_id, tag_id) VALUES (@postId, @tagId)", connection, transaction);
+            insertPostTagCmd.Parameters.AddWithValue("@postId", postId);
+            insertPostTagCmd.Parameters.AddWithValue("@tagId", tagId);
+            await insertPostTagCmd.ExecuteNonQueryAsync();
+        }
+
+        await transaction.CommitAsync();
+        return Results.Ok(new { message = "Пост добавлен" });
+    }
+    catch (Exception ex)
+    {
+        await transaction.RollbackAsync();
+        Console.WriteLine("Ошибка при добавлении поста: " + ex.Message);
+        return Results.Problem("Ошибка сервера при добавлении поста.");
+    }
 });
+
+
 
 app.MapPost("/api/liked", async (HttpContext context, IConfiguration config) =>
 {
@@ -346,7 +398,6 @@ app.MapPost("/api/liked", async (HttpContext context, IConfiguration config) =>
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync();
 
-        // Получаем user_id по username
         var getUserCmd = new NpgsqlCommand("SELECT id FROM users WHERE username = @username", conn);
         getUserCmd.Parameters.AddWithValue("username", username);
         var userId = (int?)await getUserCmd.ExecuteScalarAsync();
@@ -356,12 +407,10 @@ app.MapPost("/api/liked", async (HttpContext context, IConfiguration config) =>
             return Results.BadRequest("Пользователь не найден");
         }
 
-        // Получаем количество лайков у поста
         var countCmd = new NpgsqlCommand("SELECT COUNT(DISTINCT user_id) FROM likes WHERE post_id = @postId", conn);
         countCmd.Parameters.AddWithValue("postId", postId);
         var likeCount = (long?)await countCmd.ExecuteScalarAsync() ?? 0;
 
-        // Проверяем, лайкнул ли пользователь
         var likedCmd = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM likes WHERE user_id = @userId AND post_id = @postId)", conn);
         likedCmd.Parameters.AddWithValue("userId", userId);
         likedCmd.Parameters.AddWithValue("postId", postId);
@@ -401,7 +450,6 @@ app.MapPost("/api/like_post", async (HttpContext context, IConfiguration config)
 
         var userId = (int)userIdObj;
 
-        // Проверяем существует ли
         var checkLikeCmd = new NpgsqlCommand("SELECT 1 FROM likes WHERE user_id = @userId AND post_id = @postId", conn);
         checkLikeCmd.Parameters.AddWithValue("userId", userId);
         checkLikeCmd.Parameters.AddWithValue("postId", postId);
@@ -409,7 +457,6 @@ app.MapPost("/api/like_post", async (HttpContext context, IConfiguration config)
 
         if (exists)
         {
-            // Удаляет
             var deleteCmd = new NpgsqlCommand("DELETE FROM likes WHERE user_id = @userId AND post_id = @postId", conn);
             deleteCmd.Parameters.AddWithValue("userId", userId);
             deleteCmd.Parameters.AddWithValue("postId", postId);
@@ -417,14 +464,12 @@ app.MapPost("/api/like_post", async (HttpContext context, IConfiguration config)
         }
         else
         {
-            // Добавляет
             var insertCmd = new NpgsqlCommand("INSERT INTO likes (user_id, post_id) VALUES (@userId, @postId)", conn);
             insertCmd.Parameters.AddWithValue("userId", userId);
             insertCmd.Parameters.AddWithValue("postId", postId);
             await insertCmd.ExecuteNonQueryAsync();
         }
 
-        // Обновляет
         var countCmd = new NpgsqlCommand("SELECT COUNT(DISTINCT user_id) FROM likes WHERE post_id = @postId", conn);
         countCmd.Parameters.AddWithValue("postId", postId);
         var likeCount = (long?)await countCmd.ExecuteScalarAsync() ?? 0;
@@ -436,6 +481,51 @@ app.MapPost("/api/like_post", async (HttpContext context, IConfiguration config)
     catch (Exception ex)
     {
         return Results.Problem(detail: ex.Message);
+    }
+});
+
+app.MapPost("/api/logout", async (HttpContext context, IConfiguration config) =>
+{
+    try
+    {
+        context.Response.Cookies.Delete("CookieAuthBlog");
+
+        return Results.Ok(new { message = "Вы успешно вышли из аккаунта" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message);
+    }
+});
+
+app.MapGet("/api/tags", async (HttpContext context, IConfiguration config) =>
+{
+    if (!context.Request.Query.TryGetValue("postId", out var postIdStr) || !int.TryParse(postIdStr, out var postId))
+        return Results.BadRequest(new { message = "Некорректный postId" });
+
+    var tags = new List<string>();
+    try
+    {
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        var command = new NpgsqlCommand(@"SELECT t.name FROM post_tags pt JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id = @postId", connection);
+
+        command.Parameters.AddWithValue("@postId", postId);
+
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            tags.Add(reader.GetString(0));
+        }
+
+        return Results.Ok(tags);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Ошибка при получении тегов: " + ex.Message);
+        return Results.Problem("Ошибка сервера при получении тегов");
     }
 });
 
