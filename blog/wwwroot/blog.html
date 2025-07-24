@@ -124,119 +124,131 @@
 <body>
 
     <h1>Недавние посты</h1>
+
+    <input type="text" id="searchInput" placeholder="Поиск по постам..." style="width: 100%; padding: 10px; margin-bottom: 20px; font-size: 1em; border-radius: 8px; border: 1px solid #ccc;">
+
     <a href="add_post.html" class="add-post-button">+</a>
     <div id="posts"></div>
     <button id="logoutButton" class="logout-button">→▍</button>
 
     <script>
+        let allPosts = [];
+
         async function loadPosts() {
             try {
                 const response = await fetch('/api/posts');
                 if (!response.ok) throw new Error('Возникла ошибка при взаимодействии с сервером');
                 const posts = await response.json();
 
-                const container = document.getElementById('posts');
-                container.innerHTML = '';
-
                 for (const post of posts) {
-                    const postElement = document.createElement('div');
-                    postElement.className = 'post';
-
-                    let imgHtml = '';
-                    if (post.image_url) {
-                        imgHtml = `<img src="${post.image_url}" alt="Изображение поста">`;
+                    try {
+                        const tagResponse = await fetch(`/api/tags?postId=${post.id}`);
+                        if (!tagResponse.ok) throw new Error("Ошибка загрузки тегов");
+                        const tags = await tagResponse.json();
+                        post._tags = tags; 
+                    } catch (err) {
+                        console.error("Ошибка загрузки тегов:", err.message);
+                        post._tags = [];
                     }
+                }
 
-                    const postId = post.id;
+                allPosts = posts;
+                renderPosts(posts);
+            } catch (err) {
+                document.getElementById('posts').innerHTML = `<p style="color:red;">${err.message}</p>`;
+            }
+        }
+
+        async function renderPosts(postsToRender) {
+            const container = document.getElementById('posts');
+            container.innerHTML = '';
+
+            for (const post of postsToRender) {
+                const postElement = document.createElement('div');
+                postElement.className = 'post';
+
+                let imgHtml = '';
+                if (post.image_url) {
+                    imgHtml = `<img src="${post.image_url}" alt="Изображение поста">`;
+                }
+
+                const postId = post.id;
+                const username = localStorage.getItem("username");
+
+                let likeCount = 0;
+                let liked = false;
+                let likeClass = '';
+
+                try {
+                    const like_response = await fetch("/api/liked", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ postId, username })
+                    });
+
+                    if (!like_response.ok) throw new Error('Ошибка при получении лайков');
+
+                    const like_info = await like_response.json();
+                    likeCount = like_info.likeCount;
+                    liked = like_info.liked;
+                    likeClass = liked ? 'liked' : '';
+                } catch (err) {
+                    console.error("Ошибка получения лайков:", err.message);
+                }
+
+                let tagsHtml = '';
+                if (post._tags && post._tags.length > 0) {
+                    tagsHtml = `<div class="tags">${post._tags.map(tag => `<span class="tag">${tag}</span>`).join(' ')}</div>`;
+                }
+
+                postElement.innerHTML = `
+                        ${imgHtml}
+                        <h2>${post.title}</h2>
+                        <div class="date">${new Date(post.created_at).toLocaleString()}</div>
+                        <p>${post.contend}</p>
+                        ${tagsHtml}
+                        <button class="like-button ${likeClass}" data-post-id="${postId}">
+                            ❤️ Лайк (<span class="like-count">${likeCount}</span>)
+                        </button>
+                        <button class="comment-button" data-post-id="${postId}">
+                            💬 Комментарии
+                        </button>
+                    `;
+                container.appendChild(postElement);
+            }
+
+            document.querySelectorAll('.like-button').forEach(button => {
+                button.addEventListener('click', async () => {
+                    const postId = button.getAttribute('data-post-id');
                     const username = localStorage.getItem("username");
 
-                    let likeCount = 0;
-                    let liked = false;
-                    let likeClass = '';
-
                     try {
-                        const like_response = await fetch("/api/liked", {
+                        const response = await fetch("/api/like_post", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ postId, username })
                         });
 
-                        if (!like_response.ok) throw new Error('Ошибка при получении лайков');
+                        if (!response.ok) throw new Error("Ошибка при отправке лайка");
 
-                        const like_info = await like_response.json();
-                        likeCount = like_info.likeCount;
-                        liked = like_info.liked;
-                        likeClass = liked ? 'liked' : '';
+                        const result = await response.json();
+                        const newCount = result.likeCount;
+                        const liked = result.liked;
+
+                        button.classList.toggle('liked', liked);
+                        button.querySelector('.like-count').textContent = newCount;
                     } catch (err) {
-                        console.error("Ошибка получения лайков:", err.message);
+                        console.error("Ошибка лайка:", err.message);
                     }
-
-                    // Загрузка тегов
-                    let tagsHtml = '';
-                    try {
-                        const tagResponse = await fetch(`/api/tags?postId=${postId}`);
-                        if (!tagResponse.ok) throw new Error("Ошибка загрузки тегов");
-
-                        const tags = await tagResponse.json();
-                        if (tags.length > 0) {
-                            tagsHtml = `<div class="tags">${tags.map(tag => `<span class="tag">${tag}</span>`).join(' ')}</div>`;
-                        }
-                    } catch (err) {
-                        console.error("Ошибка загрузки тегов:", err.message);
-                    }
-
-                    postElement.innerHTML = `
-                            ${imgHtml}
-                            <h2>${post.title}</h2>
-                            <div class="date">${new Date(post.created_at).toLocaleString()}</div>
-                            <p>${post.contend}</p>
-                            ${tagsHtml}
-                            <button class="like-button ${likeClass}" data-post-id="${postId}">
-                                ❤️ Лайк (<span class="like-count">${likeCount}</span>)
-                            </button>
-                            <button class="comment-button" data-post-id="${postId}">
-                                💬 Комментарии
-                            </button>
-                        `;
-                    container.appendChild(postElement);
-                }
-
-                document.querySelectorAll('.like-button').forEach(button => {
-                    button.addEventListener('click', async () => {
-                        const postId = button.getAttribute('data-post-id');
-                        const username = localStorage.getItem("username");
-
-                        try {
-                            const response = await fetch("/api/like_post", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ postId, username })
-                            });
-
-                            if (!response.ok) throw new Error("Ошибка при отправке лайка");
-
-                            const result = await response.json();
-                            const newCount = result.likeCount;
-                            const liked = result.liked;
-
-                            button.classList.toggle('liked', liked);
-                            button.querySelector('.like-count').textContent = newCount;
-                        } catch (err) {
-                            console.error("Ошибка лайка:", err.message);
-                        }
-                    });
                 });
+            });
 
-                document.querySelectorAll('.comment-button').forEach(button => {
-                    button.addEventListener('click', () => {
-                        const postId = button.getAttribute('data-post-id');
-                        window.location.href = `/comments.html?postId=${postId}`;
-                    });
+            document.querySelectorAll('.comment-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const postId = button.getAttribute('data-post-id');
+                    window.location.href = `/comments.html?postId=${postId}`;
                 });
-
-            } catch (err) {
-                document.getElementById('posts').innerHTML = `<p style="color:red;">${err.message}</p>`;
-            }
+            });
         }
 
         document.getElementById('logoutButton').addEventListener('click', () => {
@@ -245,8 +257,20 @@
             window.location.href = '/index.html';
         });
 
+        document.getElementById('searchInput').addEventListener('input', () => {
+            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+
+            const filtered = allPosts.filter(post => {
+                const titleMatch = post.title.toLowerCase().includes(query);
+                const contentMatch = (post.contend || "").toLowerCase().includes(query);
+                const tagMatch = (post._tags || []).some(tag => tag.toLowerCase().includes(query));
+                return titleMatch || contentMatch || tagMatch;
+            });
+
+            renderPosts(filtered);
+        });
+
         window.addEventListener('DOMContentLoaded', loadPosts);
     </script>
-
 </body>
 </html>
