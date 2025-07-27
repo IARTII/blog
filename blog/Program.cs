@@ -1,17 +1,14 @@
-﻿using Npgsql;
-using System;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Npgsql;
 using System.Data;
 using System.Security.Claims;
 using System.Text.Json;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authorization;
-using System.Text.Json.Serialization;
 
 List<Post> posts = new List<Post>();
 
 var builder = WebApplication.CreateBuilder();
-//builder.Services.AddSingleton<YourNamespace.Postgres.Db>();
+
 builder.Services.AddAuthentication("CookieAuthBlog")
     .AddCookie("CookieAuthBlog", options =>
     {
