@@ -100,6 +100,46 @@ app.MapGet("/api/comments", async (HttpContext context, IConfiguration config) =
     }
 });
 
+app.MapGet("/api/stats", async (HttpRequest req, IConfiguration config) =>
+{
+    string? date = req.Query["date"];
+    string? userId = req.Query["user_id"];
+    string? tag = req.Query["tag"];
+
+    var connectionString = config.GetConnectionString("DefaultConnection");
+    await using var conn = new NpgsqlConnection(connectionString);
+    await conn.OpenAsync();
+
+    string sql = @"SELECT COUNT(*) FROM posts p LEFT JOIN post_tags pt ON p.id = pt.post_id LEFT JOIN tags t ON t.id = pt.tag_id WHERE 1=1";
+
+    var cmd = new NpgsqlCommand();
+    cmd.Connection = conn;
+
+    if (!string.IsNullOrEmpty(date))
+    {
+        sql += " AND TO_CHAR(p.created_at, 'YYYY-MM-DD') = @date";
+        cmd.Parameters.AddWithValue("date", date);
+    }
+
+    if (!string.IsNullOrEmpty(userId))
+    {
+        sql += " AND p.user_id = @userId";
+        cmd.Parameters.AddWithValue("userId", int.Parse(userId));
+    }
+
+    if (!string.IsNullOrEmpty(tag))
+    {
+        sql += " AND t.name = @tag";
+        cmd.Parameters.AddWithValue("tag", tag);
+    }
+
+    cmd.CommandText = sql;
+
+    var result = await cmd.ExecuteScalarAsync();
+    int count = Convert.ToInt32(result);
+
+    return Results.Json(new { count });
+});
 
 app.MapPost("/api/add_comment", async (HttpContext context, IConfiguration config) =>
 {

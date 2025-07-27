@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="windows-1251">
+    <title>Статистика постов</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            padding: 20px;
+        }
+
+        .form-container {
+            background: white;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        input, button {
+            margin-top: 5px;
+            padding: 5px;
+            width: 200px;
+        }
+
+        #result {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Статистика постов</h1>
+
+    <div class="form-container">
+        <h2>Фильтр</h2>
+        <label>Дата (YYYY-MM-DD):</label>
+        <input type="text" id="date">
+
+        <label>ID пользователя:</label>
+        <input type="text" id="user">
+
+        <label>Тег:</label>
+        <input type="text" id="tag">
+
+        <br><br>
+        <button onclick="loadStats()">Получить количество постов</button>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function loadStats() {
+            const date = document.getElementById("date").value;
+            const user = document.getElementById("user").value;
+            const tag = document.getElementById("tag").value;
+
+            let url = "/api/stats?";
+            if (date) url += `date=${encodeURIComponent(date)}&`;
+            if (user) url += `user_id=${encodeURIComponent(user)}&`;
+            if (tag) url += `tag=${encodeURIComponent(tag)}&`;
+
+            const res = await fetch(url);
+            const data = await res.json();
+
+            document.getElementById("result").innerText =
+                `Количество постов: ${data.count}`;
+        }
+    </script>
+</body>
+</html>
