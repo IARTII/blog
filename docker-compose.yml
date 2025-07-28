@@ -4,7 +4,7 @@ services:
   webapp:
     build: .
     ports:
-      - "7218:80"  # Пробрасываем порт 80 внутри контейнера на 7218 хоста
+      - "7218:80"  
     environment:
       - ConnectionStrings__DefaultConnection=Host=localhost;Database=blogDB;Username=postgres;Password=1111
     depends_on:
