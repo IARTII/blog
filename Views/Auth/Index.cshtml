@@ -1,0 +1,47 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="windows-1251">
+    <title>Регистрация</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 400px;
+            margin: 40px auto;
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 6px 0;
+        }
+
+        button {
+            padding: 10px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h2>Регистрация</h2>
+    <form method="post" asp-controller="Auth" asp-action="Register">
+        <label>Имя пользователя:</label>
+        <input type="text" name="Username" />
+
+        <label>Пароль:</label>
+        <input type="password" name="Password" />
+
+        <label>Повторите пароль:</label>
+        <input type="password" name="ConfirmPassword" />
+
+        <button type="submit">Зарегистрироваться</button>
+    </form>
+
+    <a asp-controller="Auth" asp-action="Login">Или войдите в аккаунт</a>
+</body>
+</html>

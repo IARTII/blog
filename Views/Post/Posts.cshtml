@@ -1,0 +1,187 @@
+﻿@using Blogs.Models
+@model List<Post>
+
+@{
+    ViewData["Title"] = "Недавние посты";
+}
+
+<style>
+    /* Твои стили без изменений */
+    body {
+        font-family: Arial, sans-serif;
+        background: #f4f4f4;
+        padding: 20px;
+    }
+
+    .post {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 0 8px rgba(0,0,0,0.1);
+        margin-bottom: 15px;
+    }
+
+        .post h2 {
+            margin-top: 0;
+        }
+
+    .date {
+        color: #777;
+        font-size: 0.9em;
+    }
+
+    .post img {
+        max-width: 100%;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+
+    .add-post-button {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+        background-color: #4CAF50;
+        color: white;
+        font-size: 28px;
+        font-weight: bold;
+        text-align: center;
+        line-height: 40px;
+        border-radius: 50%;
+        text-decoration: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        transition: background-color 0.3s ease;
+        z-index: 9999;
+    }
+
+        .add-post-button:hover {
+            background-color: #45a049;
+        }
+
+    .like-button {
+        background-color: #eee;
+        border: none;
+        padding: 5px 10px;
+        margin-top: 10px;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+        .like-button.liked {
+            background-color: #ff4d4d;
+            color: white;
+        }
+
+    .comment-button {
+        background-color: #e0e0e0;
+        border: none;
+        padding: 5px 10px;
+        margin-top: 10px;
+        margin-left: 10px;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+        .comment-button:hover {
+            background-color: #d0d0d0;
+        }
+
+    .logout-button {
+        position: fixed;
+        top: 20px;
+        right: 70px;
+        width: 40px;
+        height: 40px;
+        background-color: #f44336;
+        color: white;
+        font-size: 20px;
+        font-weight: bold;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        transition: background-color 0.3s ease;
+        z-index: 9999;
+    }
+
+        .logout-button:hover {
+            background-color: #d32f2f;
+        }
+</style>
+
+<h1>Недавние посты</h1>
+
+<a href="/Statistic/Index">Статистика по блогу</a>
+
+<input type="text" id="searchInput" placeholder="Поиск по постам..."
+       style="width: 100%; padding: 10px; margin-bottom: 20px; font-size: 1em; border-radius: 8px; border: 1px solid #ccc;">
+
+<a href="/Post/Add" class="add-post-button">+</a>
+<button id="logoutButton" class="logout-button">→▍</button>
+
+<div id="posts">
+    @foreach (var post in Model)
+    {
+        <div class="post" data-title="@post.title" data-content="@post.contend">
+            @if (!string.IsNullOrEmpty(post.image_url))
+            {
+                <img src="@post.image_url" alt="Изображение поста" />
+            }
+            <h2>@post.title</h2>
+            <div class="date">@post.created_at.ToString("dd.MM.yyyy HH:mm")</div>
+            <p>@post.contend</p>
+
+            <button class="like-button" data-post-id="@post.id">
+                ❤️ Лайк
+            </button>
+            <button class="comment-button" data-post-id="@post.id">
+                💬 Комментарии
+            </button>
+        </div>
+    }
+</div>
+
+<script>
+    document.getElementById('logoutButton').addEventListener('click', () => {
+        fetch('/Auth/Logout', { method: 'POST' }).then(() => {
+            window.location.href = '/Auth/Login';
+        });
+    });
+
+    document.querySelectorAll('.like-button').forEach(button => {
+        button.addEventListener('click', async () => {
+            const postId = button.getAttribute('data-post-id');
+            try {
+                const response = await fetch("/api/like_post", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ postId })
+                });
+                if (!response.ok) throw new Error("Ошибка лайка");
+                const result = await response.json();
+                button.classList.toggle('liked', result.liked);
+                // Можно убрать, так как нет LikeCount в модели
+                // button.querySelector('.like-count').textContent = result.likeCount;
+            } catch (err) {
+                console.error(err.message);
+            }
+        });
+    });
+
+    document.querySelectorAll('.comment-button').forEach(button => {
+        button.addEventListener('click', () => {
+            const postId = button.getAttribute('data-post-id');
+            window.location.href = `/Comments/Index?postId=${postId}`;
+        });
+    });
+
+    document.getElementById('searchInput').addEventListener('input', () => {
+        const query = document.getElementById('searchInput').value.trim().toLowerCase();
+        document.querySelectorAll('#posts .post').forEach(post => {
+            const titleMatch = post.dataset.title.toLowerCase().includes(query);
+            const contentMatch = post.dataset.content.toLowerCase().includes(query);
+            post.style.display = (titleMatch || contentMatch) ? '' : 'none';
+        });
+    });
+</script>

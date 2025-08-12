@@ -1,0 +1,46 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="windows-1251">
+    <title>Вход</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 400px;
+            margin: 40px auto;
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 6px 0;
+        }
+
+        button {
+            padding: 10px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h2>Вход</h2>
+    <div>
+        <form method="post" asp-controller="Auth" asp-action="inlet">
+            <label>Имя пользователя:</label>
+            <input type="text" name="Username" />
+
+            <label>Пароль:</label>
+            <input type="Password" name="Password" />
+
+            <button type="submit">Войти</button>
+        </form>
+
+        <a asp-controller="Auth" asp-action="Index">Или зареистрируйтесь</a>
+    </div>
+</body>
+</html>
