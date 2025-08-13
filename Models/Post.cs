@@ -1,14 +1,12 @@
-﻿namespace Blogs.Models
+﻿public class Post
 {
-    public class Post
-    {
-        public string id { get; set; }
-        public string user_id { get; set; }
-        public string title { get; set; }
-        public string contend { get; set; }
-        public DateTime created_at { get; set; }
-        public string? image_url { get; set; }
-        public List<string>? Tags { get; set; } = new List<string>();
-    }
-
+    public string id { get; set; }
+    public string user_id { get; set; }
+    public string title { get; set; }
+    public string contend { get; set; }
+    public DateTime created_at { get; set; }
+    public string? image_url { get; set; }
+    public List<string> Tags { get; set; } = new();
+    public bool IsLiked { get; set; }
+    public long LikeCount { get; set; }
 }

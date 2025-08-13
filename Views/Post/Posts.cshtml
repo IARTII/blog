@@ -3,10 +3,10 @@
 
 @{
     ViewData["Title"] = "Недавние посты";
+    var currentUsername = User.Identity?.Name ?? "";
 }
 
 <style>
-    /* Твои стили без изменений */
     body {
         font-family: Arial, sans-serif;
         background: #f4f4f4;
@@ -131,9 +131,7 @@
 </style>
 
 <h1>Недавние посты</h1>
-
 <a href="/Statistic/Index">Статистика по блогу</a>
-
 <input type="text" id="searchInput" placeholder="Поиск по постам..." style="width: 100%; padding: 10px; margin-bottom: 20px; font-size: 1em; border-radius: 8px; border: 1px solid #ccc;">
 
 <a asp-controller="Post" asp-action="AddPost" class="add-post-button">+</a>
@@ -142,7 +140,7 @@
 <div id="posts">
     @foreach (var post in Model)
     {
-        <div class="post" data-title="@post.title" data-content="@post.contend">
+        <div class="post" id="post-@post.id" data-title="@post.title" data-content="@post.contend">
             @if (!string.IsNullOrEmpty(post.image_url))
             {
                 <img src="@post.image_url" alt="Изображение поста" />
@@ -151,7 +149,6 @@
             <div class="date">@post.created_at.ToString("dd.MM.yyyy HH:mm")</div>
             <p>@post.contend</p>
 
-            @* Теги *@
             @if (post.Tags != null && post.Tags.Any())
             {
                 <div class="tags">
@@ -162,55 +159,45 @@
                 </div>
             }
 
-            <button class="like-button" data-post-id="@post.id">
-                ❤️ Лайк
+            <button type="button"
+                    class="like-button @(post.IsLiked ? "liked" : "")"
+                    data-post-id="@post.id"
+                    data-liked="@post.IsLiked.ToString().ToLower()">
+                ❤️ Лайк (@post.LikeCount)
             </button>
-            <button class="comment-button" data-post-id="@post.id">
-                💬 Комментарии
-            </button>
+
+            <form asp-controller="Comments" asp-action="Index" method="get" style="display:inline;">
+                <input type="hidden" name="postId" value="@post.id" />
+                <button type="submit" class="comment-button">💬 Комментарии</button>
+            </form>
         </div>
     }
 </div>
 
-
 <script>
-    document.getElementById('logoutButton').addEventListener('click', () => {
-        fetch('/Auth/Logout', { method: 'POST' }).then(() => {
-            window.location.href = '/Auth/Login';
-        });
-    });
+    const currentUsername = "@currentUsername";
 
-    document.querySelectorAll('.like-button').forEach(button => {
-        button.addEventListener('click', async () => {
-            const postId = button.getAttribute('data-post-id');
-            try {
-                const response = await fetch("/api/like_post", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ postId })
-                });
-                if (!response.ok) throw new Error("Ошибка лайка");
-                const result = await response.json();
-                button.classList.toggle('liked', result.liked);
-            } catch (err) {
-                console.error(err.message);
-            }
-        });
-    });
+            document.getElementById('posts').addEventListener('click', async function(e) {
+        const button = e.target.closest('.like-button');
+        if (!button) return;
 
-    document.querySelectorAll('.comment-button').forEach(button => {
-        button.addEventListener('click', () => {
-            const postId = button.getAttribute('data-post-id');
-            window.location.href = `/Comments/Index?postId=${postId}`;
-        });
-    });
+        e.preventDefault();
+        const postId = button.dataset.postId;
 
-    document.getElementById('searchInput').addEventListener('input', () => {
-        const query = document.getElementById('searchInput').value.trim().toLowerCase();
-        document.querySelectorAll('#posts .post').forEach(post => {
-            const titleMatch = post.dataset.title.toLowerCase().includes(query);
-            const contentMatch = post.dataset.content.toLowerCase().includes(query);
-            post.style.display = (titleMatch || contentMatch) ? '' : 'none';
-        });
+        try {
+            const response = await fetch("/like_post", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ postId, username: currentUsername })
+            });
+
+            if (!response.ok) throw new Error("Ошибка лайка");
+
+            const result = await response.json();
+            button.classList.toggle('liked', result.liked);
+            button.textContent = `❤️ Лайк (${result.likeCount})`;
+        } catch (err) {
+            console.error(err.message);
+        }
     });
 </script>
