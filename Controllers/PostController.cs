@@ -18,15 +18,28 @@ namespace Blogs.Controllers
 
         public async Task<IActionResult> Posts()
         {
-            var connectionString = _config.GetConnectionString("DefaultConnection");
             var posts = new List<Post>();
 
-            await using var conn = new NpgsqlConnection(connectionString);
+            await using var conn = new NpgsqlConnection(_config.GetConnectionString("DefaultConnection"));
             await conn.OpenAsync();
 
-            var cmd = new NpgsqlCommand("SELECT id, user_id, title, content, created_at, image_source FROM posts", conn);
-            await using var reader = await cmd.ExecuteReaderAsync();
+            var cmd = new NpgsqlCommand(@"
+                SELECT 
+                    p.id,
+                    p.user_id,
+                    p.title,
+                    p.content,
+                    p.created_at,
+                    p.image_source AS image_url,
+                    COALESCE(ARRAY_AGG(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+                FROM posts p
+                LEFT JOIN post_tags pt ON pt.post_id = p.id
+                LEFT JOIN tags t ON t.id = pt.tag_id
+                GROUP BY p.id
+                ORDER BY p.created_at DESC;
+            ", conn);
 
+            await using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
                 posts.Add(new Post
@@ -36,14 +49,16 @@ namespace Blogs.Controllers
                     title = reader["title"].ToString(),
                     contend = reader["content"].ToString(),
                     created_at = (DateTime)reader["created_at"],
-                    image_url = reader["image_source"] == DBNull.Value ? null : reader["image_source"].ToString()
+                    image_url = reader.IsDBNull(reader.GetOrdinal("image_url")) ? null : reader["image_url"].ToString(),
+                    Tags = reader.IsDBNull(reader.GetOrdinal("tags"))
+                        ? new List<string>()
+                        : reader.GetFieldValue<string[]>(reader.GetOrdinal("tags")).ToList()
                 });
             }
 
-            posts.Reverse();
-
             return View(posts);
         }
+
 
         public ActionResult AddPost(int id)
         {
@@ -150,5 +165,50 @@ namespace Blogs.Controllers
                 return StatusCode(500, "Ошибка сервера при добавлении поста.");
             }
         }
+
+        [HttpGet("posts-with-tags")]
+        public async Task<IActionResult> GetPostsWithTags()
+        {
+            var posts = new List<object>();
+
+            await using var connection = new NpgsqlConnection(_config.GetConnectionString("DefaultConnection"));
+            await connection.OpenAsync();
+
+            var cmd = new NpgsqlCommand(@"
+                SELECT 
+    p.id,
+    p.title,
+    p.contend,
+    p.image_source AS image_url,
+    p.created_at,
+    u.username,
+    COALESCE(ARRAY_AGG(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+FROM posts p
+JOIN users u ON u.id = p.user_id
+LEFT JOIN post_tags pt ON pt.post_id = p.id
+LEFT JOIN tags t ON t.id = pt.tag_id
+GROUP BY p.id, u.username
+ORDER BY p.created_at DESC;
+
+            ", connection);
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                posts.Add(new
+                {
+                    id = reader.GetInt32(0),
+                    title = reader.GetString(1),
+                    contend = reader.GetString(2),
+                    image_url = reader.IsDBNull(3) ? null : reader.GetString(3),
+                    created_at = reader.GetDateTime(4),
+                    username = reader.GetString(5),
+                    tags = reader.IsDBNull(6) ? Array.Empty<string>() : reader.GetFieldValue<string[]>(6)
+                });
+            }
+
+            return Ok(posts);
+        }
+
     }
 }

@@ -108,14 +108,33 @@
         .logout-button:hover {
             background-color: #d32f2f;
         }
+
+    .tags {
+        margin-top: 10px;
+    }
+
+    .tag {
+        display: inline-block;
+        background-color: #e0e0e0;
+        color: #333;
+        padding: 3px 8px;
+        margin-right: 5px;
+        margin-bottom: 5px;
+        border-radius: 12px;
+        font-size: 0.85em;
+        cursor: default;
+    }
+
+        .tag:hover {
+            background-color: #d0d0d0;
+        }
 </style>
 
 <h1>Недавние посты</h1>
 
 <a href="/Statistic/Index">Статистика по блогу</a>
 
-<input type="text" id="searchInput" placeholder="Поиск по постам..."
-       style="width: 100%; padding: 10px; margin-bottom: 20px; font-size: 1em; border-radius: 8px; border: 1px solid #ccc;">
+<input type="text" id="searchInput" placeholder="Поиск по постам..." style="width: 100%; padding: 10px; margin-bottom: 20px; font-size: 1em; border-radius: 8px; border: 1px solid #ccc;">
 
 <a asp-controller="Post" asp-action="AddPost" class="add-post-button">+</a>
 <button id="logoutButton" class="logout-button">→▍</button>
@@ -132,6 +151,17 @@
             <div class="date">@post.created_at.ToString("dd.MM.yyyy HH:mm")</div>
             <p>@post.contend</p>
 
+            @* Теги *@
+            @if (post.Tags != null && post.Tags.Any())
+            {
+                <div class="tags">
+                    @foreach (var tag in post.Tags)
+                    {
+                        <span class="tag">@tag</span>
+                    }
+                </div>
+            }
+
             <button class="like-button" data-post-id="@post.id">
                 ❤️ Лайк
             </button>
@@ -141,6 +171,7 @@
         </div>
     }
 </div>
+
 
 <script>
     document.getElementById('logoutButton').addEventListener('click', () => {
@@ -161,8 +192,6 @@
                 if (!response.ok) throw new Error("Ошибка лайка");
                 const result = await response.json();
                 button.classList.toggle('liked', result.liked);
-                // Можно убрать, так как нет LikeCount в модели
-                // button.querySelector('.like-count').textContent = result.likeCount;
             } catch (err) {
                 console.error(err.message);
             }

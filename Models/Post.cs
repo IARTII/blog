@@ -8,6 +8,7 @@
         public string contend { get; set; }
         public DateTime created_at { get; set; }
         public string? image_url { get; set; }
+        public List<string>? Tags { get; set; } = new List<string>();
     }
 
 }
