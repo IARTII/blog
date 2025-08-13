@@ -234,3 +234,4 @@ C:\Users\New\source\repos\Blogs\Blogs\bin\Debug\net8.0\BCrypt.Net-Next.dll
 C:\Users\New\source\repos\Blogs\Blogs\bin\Debug\net8.0\Microsoft.Extensions.Logging.Abstractions.dll
 C:\Users\New\source\repos\Blogs\Blogs\bin\Debug\net8.0\Npgsql.dll
 C:\Users\New\source\repos\Blogs\Blogs\bin\Debug\net8.0\Blogs.staticwebassets.runtime.json
+C:\Users\New\source\repos\Blogs\Blogs\obj\Debug\net8.0\Blogs.sourcelink.json
