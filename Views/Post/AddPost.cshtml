@@ -1,0 +1,115 @@
+﻿@{
+    ViewData["Title"] = "Добавление поста";
+}
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"]</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f8;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        form {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"],
+        textarea,
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccd0d5;
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+            input[type="text"]:focus,
+            textarea:focus {
+                outline: none;
+                border-color: #3498db;
+                box-shadow: 0 0 4px rgba(52, 152, 219, 0.5);
+            }
+
+        textarea {
+            resize: vertical;
+        }
+
+        button {
+            display: block;
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            color: #fff;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+
+            button:hover {
+                background: linear-gradient(135deg, #2980b9, #1f618d);
+                transform: translateY(-2px);
+            }
+
+        p {
+            text-align: center;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Добавление поста</h2>
+
+    <form asp-controller="Post" asp-action="NewPost" method="post" enctype="multipart/form-data">
+        @Html.AntiForgeryToken()
+
+        <label for="title">Заголовок:</label>
+        <input type="text" id="title" name="title" required>
+
+        <label for="content">Текст поста:</label>
+        <textarea id="content" name="content" rows="10" required></textarea>
+
+        <label for="tags">Теги (через запятую):</label>
+        <input type="text" id="tags" name="tags" placeholder="Например: фото, природа">
+
+        <label for="image">Изображение:</label>
+        <input type="file" id="image" name="image" accept="image/*">
+
+        <button type="submit">Добавить пост</button>
+    </form>
+
+    @if (TempData["Success"] != null)
+    {
+        <p style="color:green">@TempData["Success"]</p>
+    }
+</body>
+</html>

@@ -60,9 +60,9 @@ namespace Blogs.Controllers
             if (BCrypt.Net.BCrypt.Verify(password, storedHash))
             {
                 var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.Name, username),
-        };
+                {
+                    new Claim(ClaimTypes.Name, username),
+                };
                 var identity = new ClaimsIdentity(claims, "CookieAuthBlog");
                 var principal = new ClaimsPrincipal(identity);
 
