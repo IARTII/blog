@@ -75,8 +75,6 @@ namespace Blogs.Controllers
             return View(posts);
         }
 
-
-
         public ActionResult AddPost(int id)
         {
             return View();
@@ -235,7 +233,5 @@ namespace Blogs.Controllers
 
             return Json(new { liked = !liked, likeCount });
         }
-
-
     }
 }

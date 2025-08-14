@@ -1,0 +1,143 @@
+﻿@using Blogs.Models
+@model PostWithComments
+
+@{
+    ViewData["Title"] = "Комментарии к посту";
+    var currentUsername = User.Identity?.Name ?? "Гость";
+}
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f4f4f4;
+        padding: 20px;
+    }
+
+    .post {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 8px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+        .post img {
+            max-width: 100%;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+    .comment {
+        padding: 10px;
+        margin-bottom: 10px;
+        background: #fff;
+        border-left: 4px solid #4CAF50;
+        border-radius: 4px;
+    }
+
+    .comment-form {
+        background: #fff;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 0 6px rgba(0,0,0,0.1);
+        margin-top: 20px;
+    }
+
+    textarea {
+        width: 100%;
+        height: 80px;
+        margin-bottom: 10px;
+        padding: 8px;
+        resize: vertical;
+    }
+
+    button {
+        padding: 8px 16px;
+        background: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+        button:hover {
+            background: #45a049;
+        }
+
+    .back-link {
+        display: inline-block;
+        margin-bottom: 20px;
+        color: #333;
+        text-decoration: none;
+    }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+</style>
+
+<a asp-controller="Post" asp-action="Posts" class="back-link">← Назад к постам</a>
+
+<div class="post">
+    <h2>@Model.Post.title</h2>
+    @if (!string.IsNullOrEmpty(Model.Post.image_url))
+    {
+        <img src="@Url.Content(Model.Post.image_url)" alt="Изображение поста" />
+    }
+    <p>@Model.Post.contend</p>
+</div>
+
+<h3>Комментарии</h3>
+<div id="comments">
+    @foreach (var comment in Model.Comments)
+    {
+        <div class="comment">
+            <strong>@comment.username</strong> (@comment.created_at.ToString("dd.MM.yyyy HH:mm")):<br />
+            @comment.text
+        </div>
+    }
+</div>
+
+<div class="comment-form">
+    <h4>Добавить комментарий</h4>
+    <textarea id="commentText" placeholder="Ваш комментарий..."></textarea>
+    <button id="sendBtn">Отправить</button>
+</div>
+
+<script>
+    const postId = @Model.Post.id;
+    const username = "@currentUsername";
+
+    const commentsDiv = document.getElementById("comments");
+    const commentText = document.getElementById("commentText");
+    const sendBtn = document.getElementById("sendBtn");
+
+    sendBtn.addEventListener("click", async () => {
+        const text = commentText.value.trim();
+        if (!text) return alert("Комментарий не может быть пустым");
+
+        try {
+            const response = await fetch('@Url.Action("AddComment", "Comments")', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ postId, text, username })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err?.errors?.text?.[0] || "Ошибка отправки комментария");
+            }
+
+            const newComment = await response.json();
+
+            const div = document.createElement("div");
+            div.className = "comment";
+            div.innerHTML = `<strong>${newComment.username}</strong> (${new Date(newComment.created_at).toLocaleString()}):<br>${newComment.text}`;
+            commentsDiv.appendChild(div);
+
+            commentText.value = "";
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+</script>
