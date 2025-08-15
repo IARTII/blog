@@ -5,8 +5,6 @@ using Blogs.Models;
 
 namespace Blogs.Controllers
 {
-    [ApiController]
-    [Route("api")]
     public class CommentsController : Controller
     {
         private readonly IConfiguration _config;
@@ -100,7 +98,6 @@ namespace Blogs.Controllers
             await using var conn = new NpgsqlConnection(connStr);
             await conn.OpenAsync();
 
-            // Получаем user_id по username
             var cmdUser = new NpgsqlCommand("SELECT id FROM users WHERE username=@username", conn);
             cmdUser.Parameters.AddWithValue("username", model.username);
             int userId;
@@ -111,7 +108,6 @@ namespace Blogs.Controllers
                 userId = reader.GetInt32(0);
             }
 
-            // Вставка комментария
             var cmdInsert = new NpgsqlCommand(@"
             INSERT INTO comments (post_id, user_id, content, created_at)
             VALUES (@postId, @userId, @content, @createdAt)", conn);
@@ -122,8 +118,6 @@ namespace Blogs.Controllers
             cmdInsert.Parameters.AddWithValue("createdAt", DateTime.Now);
 
             await cmdInsert.ExecuteNonQueryAsync();
-
-            // Возвращаем новый комментарий для отображения
             model.created_at = DateTime.Now;
             return Json(model);
         }

@@ -92,14 +92,12 @@ namespace Blogs.Controllers
             using var conn = new NpgsqlConnection(connectionString);
             conn.Open(); 
 
-            // Проверка на существование пользователя
             var checkCmd = new NpgsqlCommand("SELECT 1 FROM users WHERE username = @username", conn);
             checkCmd.Parameters.AddWithValue("username", username);
             var exists = checkCmd.ExecuteScalarAsync();
             if (exists != null)
                 return Conflict(new { message = "Пользователь уже существует." });
 
-            // Создание пользователя
             var insertCmd = new NpgsqlCommand(
                 "INSERT INTO users (username, password_hash) VALUES (@username, @password_hash)", conn);
             insertCmd.Parameters.AddWithValue("username", username);
@@ -108,6 +106,14 @@ namespace Blogs.Controllers
             conn.Close();
 
             return Ok(new { message = "Пользователь зарегистрирован" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Logout()
+        {
+            await HttpContext.SignOutAsync();
+            return RedirectToAction("Index", "Auth");
         }
     }
 }

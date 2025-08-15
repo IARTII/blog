@@ -18,7 +18,7 @@ namespace Blogs.Controllers
 
         public async Task<IActionResult> Posts()
         {
-            var username = User.Identity.Name; // текущий пользователь
+            var username = User.Identity.Name;
             var posts = new List<Post>();
 
             var connectionString = _config.GetConnectionString("DefaultConnection");
@@ -96,7 +96,6 @@ namespace Blogs.Controllers
             await using var transaction = await connection.BeginTransactionAsync();
             try
             {
-                // Получаем user_id
                 var getUserCmd = new NpgsqlCommand(
                     "SELECT id FROM users WHERE username = @username",
                     connection, transaction);
@@ -107,7 +106,6 @@ namespace Blogs.Controllers
 
                 long userId = Convert.ToInt64(userIdObj);
 
-                // Обрабатываем изображение
                 string? imagePath = null;
                 if (image != null && image.Length > 0)
                 {
@@ -119,7 +117,6 @@ namespace Blogs.Controllers
                     imagePath = "/images/" + fileName;
                 }
 
-                // Вставляем пост
                 var insertPostCmd = new NpgsqlCommand(
                     "INSERT INTO posts (user_id, title, content, created_at, image_source) " +
                     "VALUES (@user_id, @title, @content, NOW(), @image) RETURNING id",
@@ -132,7 +129,6 @@ namespace Blogs.Controllers
                 var postIdObj = await insertPostCmd.ExecuteScalarAsync();
                 long postId = Convert.ToInt64(postIdObj);
 
-                // Обрабатываем теги
                 var tagList = tags?
                     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Select(t => t.ToLowerInvariant())
@@ -143,7 +139,6 @@ namespace Blogs.Controllers
                 {
                     long tagId;
 
-                    // Ищем тег
                     var findTagCmd = new NpgsqlCommand("SELECT id FROM tags WHERE name = @name", connection, transaction);
                     findTagCmd.Parameters.AddWithValue("@name", tagName);
                     var tagIdObj = await findTagCmd.ExecuteScalarAsync();
@@ -187,7 +182,6 @@ namespace Blogs.Controllers
             if (!int.TryParse(request.PostId, out var pid))
                 return BadRequest("Неверный postId");
 
-            // Проверяем авторизацию
             var username = request.Username ?? User.Identity?.Name;
             if (string.IsNullOrWhiteSpace(username))
                 return Unauthorized();
@@ -196,13 +190,11 @@ namespace Blogs.Controllers
             await using var conn = new NpgsqlConnection(connectionString);
             await conn.OpenAsync();
 
-            // Получаем ID пользователя
             var getUserCmd = new NpgsqlCommand("SELECT id FROM users WHERE username = @username", conn);
             getUserCmd.Parameters.AddWithValue("username", username);
             var userId = (int?)await getUserCmd.ExecuteScalarAsync();
             if (userId == null) return BadRequest("Пользователь не найден");
 
-            // Проверяем, есть ли уже лайк
             var existsCmd = new NpgsqlCommand(
                 "SELECT EXISTS (SELECT 1 FROM likes WHERE user_id = @userId AND post_id = @postId)",
                 conn
@@ -226,7 +218,6 @@ namespace Blogs.Controllers
                 await insertCmd.ExecuteNonQueryAsync();
             }
 
-            // Получаем обновлённое количество лайков
             var countCmd = new NpgsqlCommand("SELECT COUNT(*) FROM likes WHERE post_id = @postId", conn);
             countCmd.Parameters.AddWithValue("postId", pid);
             var likeCount = (long)await countCmd.ExecuteScalarAsync();

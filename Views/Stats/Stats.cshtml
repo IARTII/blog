@@ -1,0 +1,92 @@
+﻿@{
+    ViewData["Title"] = "Статистика постов";
+}
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f4f4f4;
+        padding: 20px;
+    }
+
+    .form-container {
+        background: white;
+        padding: 20px;
+        margin-bottom: 30px;
+        border-radius: 10px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    label {
+        display: block;
+        margin-top: 10px;
+        font-weight: bold;
+    }
+
+    input, button {
+        margin-top: 5px;
+        padding: 5px;
+        width: 200px;
+    }
+
+    #result {
+        margin-top: 15px;
+        font-size: 18px;
+        font-weight: bold;
+    }
+</style>
+
+
+<h1>Статистика постов</h1>
+
+<div class="form-container">
+    <h2>Фильтр</h2>
+
+    <label for="date">Дата (YYYY-MM-DD):</label>
+    <input type="text" id="date" name="date" />
+
+    <label for="user">ID пользователя:</label>
+    <input type="text" id="user" name="user" />
+
+    <label for="tag">Тег:</label>
+    <input type="text" id="tag" name="tag" />
+
+    <br><br>
+    <button type="button" id="loadStatsBtn">Получить количество постов</button>
+
+    <div id="result"></div>
+</div>
+
+<script>
+    (function(){
+      const btn = document.getElementById("loadStatsBtn");
+      const endpoint = "@Url.Action("GetStats", "Stats")";
+
+      btn.addEventListener("click", async () => {
+        const date = document.getElementById("date").value.trim();
+        const user = document.getElementById("user").value.trim();
+        const tag  = document.getElementById("tag").value.trim();
+
+        const qs = new URLSearchParams();
+        if (date) qs.append("date", date);
+        if (user) qs.append("user_id", user);
+        if (tag)  qs.append("tag", tag);
+
+        const url = endpoint + (qs.toString() ? "?" + qs.toString() : "");
+        const out = document.getElementById("result");
+
+        try {
+          const res = await fetch(url);
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ message: "Ошибка запроса" }));
+            out.textContent = err.message || "Ошибка запроса";
+            return;
+          }
+          const data = await res.json();
+          out.textContent = `Количество постов: ${data.count}`;
+        } catch {
+          out.textContent = "Сеть недоступна";
+        }
+      });
+    })();
+</script>
