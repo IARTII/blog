@@ -1,5 +1,6 @@
 using Blogs.Domain.Services;
 using Blogs.Service;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +11,19 @@ builder.Services.AddAuthentication("CookieAuthBlog")
         options.LoginPath = "/login";
         options.ExpireTimeSpan = TimeSpan.FromDays(7);
     });
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Debug()
+    .WriteTo.Console()
+    .WriteTo.File(
+        "logs/log-.txt",
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 10, 
+        shared: true 
+    )
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICommentsService, CommentsService>();
