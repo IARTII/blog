@@ -11,12 +11,10 @@ namespace Blogs.Controllers
 {
     public class PostController : Controller
     {
-        private readonly IConfiguration _config;
         private readonly IPostService _postService;
 
-        public PostController(IConfiguration config, IPostService postService)
+        public PostController(IPostService postService)
         {
-            _config = config;
             _postService = postService;
         }
 
