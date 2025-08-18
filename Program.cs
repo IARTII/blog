@@ -12,6 +12,7 @@ builder.Services.AddAuthentication("CookieAuthBlog")
     });
 
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ICommentsService, CommentsService>();
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpContextAccessor();
 
