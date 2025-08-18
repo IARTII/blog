@@ -1,0 +1,79 @@
+﻿@{
+    ViewData["Title"] = "Ошибка";
+    var statusCode = ViewData["StatusCode"] ?? 500;
+    var message = ViewData["Message"] ?? "Произошла непредвиденная ошибка.";
+}
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"]</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #ff4d4d, #ffcccc);
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+        }
+
+        .error-container {
+            background: white;
+            padding: 40px 60px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            max-width: 500px;
+        }
+
+        h1 {
+            font-size: 72px;
+            margin: 0;
+            color: #ff4d4d;
+        }
+
+        h2 {
+            font-size: 28px;
+            margin: 20px 0 10px;
+        }
+
+        p {
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        a.button {
+            display: inline-block;
+            text-decoration: none;
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+            a.button:hover {
+                background-color: #45a049;
+            }
+
+        .status-code {
+            font-size: 36px;
+            font-weight: bold;
+            color: #ff4d4d;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="status-code">@statusCode</div>
+        <h2>Упс! Что-то пошло не так</h2>
+        <p>@message</p>
+        <a asp-controller="Auth" asp-action="Index" class="button">Вернуться на главную</a>
+    </div>
+</body>
+</html>

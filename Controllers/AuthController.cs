@@ -1,22 +1,17 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity.Data;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.CodeAnalysis.Scripting;
-using Npgsql;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+﻿using Blogs.Domain.Services;
 using Blogs.Models;
+using Microsoft.AspNetCore.Mvc;
+
 
 namespace Blogs.Controllers
 {
     public class AuthController : Controller
     {
-        private readonly IConfiguration _config;
+        private readonly IAuthService _authService;
 
-        public AuthController(IConfiguration config)
+        public AuthController(IAuthService authService)
         {
-            _config = config;
+            _authService = authService;
         }
 
         public ActionResult Index()
@@ -37,82 +32,34 @@ namespace Blogs.Controllers
         [HttpPost("inlet")]
         public async Task<ActionResult> inlet(User request)
         {
-            if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-                return BadRequest(new { message = "Имя пользователя и пароль обязательны" });
+            var (success, message) = await _authService.Inlet(request);
 
-            var username = request.Username;
-            var password = request.Password;
+            if (!success)
+                return BadRequest(new { message });
 
-            var connectionString = _config.GetConnectionString("DefaultConnection");
-            using var conn = new NpgsqlConnection(connectionString);
-            await conn.OpenAsync();
-
-            var checkCmd = new NpgsqlCommand("SELECT username FROM users WHERE username = @username", conn);
-            checkCmd.Parameters.AddWithValue("username", username);
-            var exists = await checkCmd.ExecuteScalarAsync();
-            if (exists == null)
-                return Conflict(new { message = "Пользователь не существует." });
-
-            var findCmd = new NpgsqlCommand("SELECT password_hash FROM users WHERE username = @username", conn);
-            findCmd.Parameters.AddWithValue("username", username);
-            var storedHash = (string)await findCmd.ExecuteScalarAsync();
-
-            if (BCrypt.Net.BCrypt.Verify(password, storedHash))
-            {
-                var claims = new List<Claim>
-                {
-                    new Claim(ClaimTypes.Name, username),
-                };
-                var identity = new ClaimsIdentity(claims, "CookieAuthBlog");
-                var principal = new ClaimsPrincipal(identity);
-
-                await HttpContext.SignInAsync("CookieAuthBlog", principal);
-
-                return RedirectToAction("Posts", "Post");
-            }
-
-            return NotFound(new { message = "Неверный пароль" });
+            return RedirectToAction("Posts", "Post");
         }
 
-
         [HttpPost("register")]
-        public ActionResult Register(User request)
+        public async Task<ActionResult> Register(User request)
         {
-            if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-            {
-                return BadRequest(new { message = "Имя пользователя и пароль обязательны" });
-            }
+            var (success, message) = await _authService.Register(request);
 
-            var username = request.Username;
-            var password = request.Password;
+            if (!success)
+                return BadRequest(new { message });
 
-            var passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
-
-            var connectionString = _config.GetConnectionString("DefaultConnection");
-            using var conn = new NpgsqlConnection(connectionString);
-            conn.Open(); 
-
-            var checkCmd = new NpgsqlCommand("SELECT 1 FROM users WHERE username = @username", conn);
-            checkCmd.Parameters.AddWithValue("username", username);
-            var exists = checkCmd.ExecuteScalarAsync();
-            if (exists != null)
-                return Conflict(new { message = "Пользователь уже существует." });
-
-            var insertCmd = new NpgsqlCommand(
-                "INSERT INTO users (username, password_hash) VALUES (@username, @password_hash)", conn);
-            insertCmd.Parameters.AddWithValue("username", username);
-            insertCmd.Parameters.AddWithValue("password_hash", passwordHash);
-            insertCmd.ExecuteNonQueryAsync();
-            conn.Close();
-
-            return Ok(new { message = "Пользователь зарегистрирован" });
+            return RedirectToAction("Posts", "Post");
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
-            await HttpContext.SignOutAsync();
+            var (success, message) = await _authService.Logout();
+
+            if (!success)
+                return BadRequest(new { message });
+
             return RedirectToAction("Index", "Auth");
         }
     }

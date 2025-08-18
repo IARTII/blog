@@ -1,3 +1,6 @@
+using Blogs.Domain.Services;
+using Blogs.Service;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddAuthentication("CookieAuthBlog")
@@ -8,19 +11,26 @@ builder.Services.AddAuthentication("CookieAuthBlog")
         options.ExpireTimeSpan = TimeSpan.FromDays(7);
     });
 
-builder.Services.AddControllers();
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddControllersWithViews();
+builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error");
+    app.UseStatusCodePagesWithReExecute("/Error/{0}");
+}
+
 app.UseHttpsRedirection();
-app.UseAuthorization();
 app.UseStaticFiles();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Auth}/{action=Index}/{id?}");
-
-app.MapControllers();
 
 app.Run();
