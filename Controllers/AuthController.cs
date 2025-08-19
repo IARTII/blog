@@ -1,7 +1,7 @@
 ﻿using Blogs.Domain.Services;
 using Blogs.Models;
+using Blogs.Exceptions;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 
 namespace Blogs.Controllers
 {
@@ -20,8 +20,7 @@ namespace Blogs.Controllers
         {
             if (HttpContext.User.Identity?.IsAuthenticated == true)
             {
-                _logger.LogInformation("Пользователь {User} уже авторизован, перенаправление на посты",
-                    HttpContext.User.Identity?.Name);
+                _logger.LogInformation("Пользователь {User} уже авторизован, перенаправление на посты", HttpContext.User.Identity?.Name);
 
                 return RedirectToAction("Posts", "Post");
             }
@@ -32,7 +31,7 @@ namespace Blogs.Controllers
 
         public ActionResult Login(int id)
         {
-            _logger.LogDebug("Перенапровление на страницу входа");
+            _logger.LogDebug("Перенаправление на страницу входа");
             return View();
         }
 
@@ -46,7 +45,7 @@ namespace Blogs.Controllers
             if (!success)
             {
                 _logger.LogWarning("Неудачная попытка входа: {Message}", message);
-                return BadRequest(new { message });
+                throw new CustomException(message, 403);
             }
 
             _logger.LogInformation("Пользователь {Username} успешно вошёл", request?.Username);
@@ -63,7 +62,7 @@ namespace Blogs.Controllers
             if (!success)
             {
                 _logger.LogWarning("Ошибка регистрации: {Message}", message);
-                return BadRequest(new { message });
+                throw new CustomException(message, 400);
             }
 
             _logger.LogInformation("Пользователь {Username} успешно зарегистрирован", request?.Username);
@@ -81,7 +80,7 @@ namespace Blogs.Controllers
             if (!success)
             {
                 _logger.LogError("Ошибка при выходе: {Message}", message);
-                return BadRequest(new { message });
+                throw new CustomException(message, 500);
             }
 
             _logger.LogInformation("Пользователь {User} вышел из системы", HttpContext.User.Identity?.Name);

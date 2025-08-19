@@ -62,26 +62,15 @@ namespace Blogs.Controllers
             return RedirectToAction("Posts", "Post");
         }
 
-        [HttpPost("like_post")]
-        public async Task<IActionResult> LikePost([FromBody] LikePostRequest request)
-        {
-            _logger.LogInformation("Пользователь {User} пытается лайкнуть пост {PostId}",
-                HttpContext.User.Identity?.Name, request?.PostId);
+        [HttpPost("like_post")] 
+        public async Task<IActionResult> LikePost([FromBody] LikePostRequest request) 
+        { 
+            var (success, message, liked) = await _postService.LikePost(request); 
 
-            var (success, message, liked) = await _postService.LikePost(request);
+            if (!success) 
+                return BadRequest(new { message }); 
 
-            if (!success)
-            {
-                _logger.LogWarning("Ошибка лайка поста {PostId}: {Message}", request?.PostId, message);
-                return BadRequest(new { message });
-            }
-
-            _logger.LogInformation("Пользователь {User} {Action} пост {PostId}",
-                HttpContext.User.Identity?.Name,
-                Convert.ToBoolean(liked) ? "лайкнул" : "снял лайк с",
-                request?.PostId);
-
-            return Json(liked);
+            return Json(liked); 
         }
     }
 }

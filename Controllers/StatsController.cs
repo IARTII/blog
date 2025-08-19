@@ -1,8 +1,6 @@
 ﻿using Blogs.Domain.Services;
-using Microsoft.AspNetCore.Http;
+using Blogs.Exceptions;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using Npgsql;
 
 namespace Blogs.Controllers
 {
@@ -35,17 +33,23 @@ namespace Blogs.Controllers
             if (!success)
             {
                 _logger.LogWarning(
-                    "Ошибка при получении статистики.Дата: {Date}, UserId: {UserId}, Тег: {Tag}, Ошибка: {Message}",
-                     date, user_id, tag, message);
+                    "Ошибка при получении статистики. Дата: {Date}, UserId: {UserId}, Тег: {Tag}, Ошибка: {Message}",
+                    date, user_id, tag, message);
 
-                return BadRequest(new { message });
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                    Request.Headers["Accept"].ToString().Contains("application/json"))
+                {
+                    return Json(new { success = false, message });
+                }
+
+                throw new CustomException(message, 500);
             }
 
             _logger.LogInformation(
                 "Статистика успешно получена. Количество: {Count}, Дата: {Date}, UserId: {UserId}, Тег: {Tag}",
                  count, date, user_id, tag);
 
-            return Ok(new { count });
+            return Ok(new { success = true, count });
         }
     }
 }

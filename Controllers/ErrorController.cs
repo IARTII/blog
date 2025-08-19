@@ -39,7 +39,18 @@ namespace Blogs.Controllers
             ViewData["StatusCode"] = statusCode ?? 500;
             ViewData["Message"] = message;
 
-            return View();
+            return View("Error");
+        }
+
+        [Route("Error/Handle")]
+        public IActionResult Handle(string? message)
+        {
+            _logger.LogError("CustomException: {Message}. URL: {Path}", message, HttpContext.Request.Path);
+
+            ViewData["StatusCode"] = 500;
+            ViewData["Message"] = message ?? "Произошла ошибка.";
+
+            return View("Error");
         }
     }
 }

@@ -1,9 +1,7 @@
 ﻿using Blogs.Domain.Services;
 using Blogs.Models;
-using Blogs.Service;
-using Microsoft.AspNetCore.Http;
+using Blogs.Exceptions;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 
 namespace Blogs.Controllers
 {
@@ -27,7 +25,7 @@ namespace Blogs.Controllers
             if (!success)
             {
                 _logger.LogWarning("Ошибка получения комментариев для поста {PostId}: {Message}", postId, message);
-                return BadRequest(new { message });
+                throw new CustomException(message, 404);
             }
 
             _logger.LogInformation("Комментарии к посту {PostId} успешно загружены", postId);
@@ -47,7 +45,7 @@ namespace Blogs.Controllers
             if (!success)
             {
                 _logger.LogWarning("Ошибка при добавлении комментария к посту {PostId}: {Message}", comment?.postId, message);
-                return BadRequest(new { message });
+                throw new CustomException(message, 400);
             }
 
             _logger.LogInformation("Комментарий успешно добавлен к посту {PostId}", comment?.postId);
