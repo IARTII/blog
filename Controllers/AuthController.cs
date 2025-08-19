@@ -66,7 +66,7 @@ namespace Blogs.Controllers
             }
 
             _logger.LogInformation("Пользователь {Username} успешно зарегистрирован", request?.Username);
-            return RedirectToAction("Posts", "Post");
+            return RedirectToAction("Login", "Auth");
         }
 
         [HttpPost]
