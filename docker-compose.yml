@@ -1,0 +1,32 @@
+services:
+  app:
+    container_name: blogs_app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: blogs-app
+    ports:
+      - "8080:8080"   # было 5000:5000
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=blogsdb;Username=postgres;Password=postgres
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15
+    container_name: blogs_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: blogsdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  postgres_data:

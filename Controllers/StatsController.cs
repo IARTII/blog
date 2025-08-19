@@ -41,7 +41,10 @@ namespace Blogs.Controllers
                 throw new CustomException(message, 500);
             }
 
-            count -= 2;
+            if(count > 0 && tag == null)
+            {
+                count -= 2;
+            }
 
             _logger.LogInformation("Статистика успешно получена. Количество: {Count}, Дата: {Date}, UserId: {UserId}, Тег: {Tag}", count, date, user_id, tag);
 
